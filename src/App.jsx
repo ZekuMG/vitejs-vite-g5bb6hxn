@@ -172,6 +172,7 @@ export default function PartySupplyApp() {
   const [isClosingCashModalOpen, setIsClosingCashModalOpen] = useState(false);
   const [selectedImage, setSelectedImage] = useState('');
   const [saleSuccessModal, setSaleSuccessModal] = useState(null); // Para modal de venta exitosa
+  const [isAutoCloseAlertOpen, setIsAutoCloseAlertOpen] = useState(false); // Nuevo Modal Automático
 
   // Edición
   const [editingProduct, setEditingProduct] = useState(null);
@@ -360,9 +361,9 @@ export default function PartySupplyApp() {
     }
   };
 
-  const handleConfirmCloseCash = () => {
+  // Función unificada para ejecutar el cierre (Manual o Automático)
+  const executeRegisterClose = (isAuto = false) => {
     setIsRegisterClosed(true);
-    // GUARDAMOS ESTADÍSTICAS EN EL LOG AL CERRAR
     addLog(
       'Cierre de Caja',
       {
@@ -372,13 +373,37 @@ export default function PartySupplyApp() {
         finalBalance: openingBalance + totalSales,
         closingTime: new Date().toLocaleTimeString('es-AR'),
         scheduledClosingTime: closingTime,
+        type: isAuto ? 'automatic' : 'manual'
       },
-      'Cierre de jornada'
+      isAuto ? 'Cierre Automático por Horario' : 'Cierre de jornada'
     );
-    // REINICIAR TRANSACCIONES DEL DÍA
+    // REINICIAR TRANSACCIONES
     setTransactions([]);
     setIsClosingCashModalOpen(false);
+    
+    if (isAuto) {
+      setIsAutoCloseAlertOpen(true);
+    }
   };
+
+  const handleConfirmCloseCash = () => executeRegisterClose(false);
+
+  // EFECTO: Monitor de Cierre Automático
+  useEffect(() => {
+    if (!isRegisterClosed && closingTime) {
+      const nowStr = currentTime.toLocaleTimeString('es-AR', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      });
+
+      // Compara hora actual (HH:mm) con hora de cierre
+      if (nowStr === closingTime) {
+        executeRegisterClose(true);
+      }
+    }
+  }, [currentTime, closingTime, isRegisterClosed, salesCount, totalSales, openingBalance]);
+
 
   const handleSaveOpeningBalance = () => {
     const value = Number(tempOpeningBalance);
@@ -2177,6 +2202,34 @@ export default function PartySupplyApp() {
                 className="w-full bg-green-500 text-white py-3 rounded-lg font-bold hover:bg-green-600 transition flex items-center justify-center gap-2"
               >
                 <CheckCircle size={18} /> Continuar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- NUEVO: MODAL DE CIERRE AUTOMÁTICO --- */}
+      {isAutoCloseAlertOpen && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[70] p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-300">
+            <div className="p-6 text-center">
+              <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Clock size={32} className="text-amber-600" />
+              </div>
+              <h3 className="text-xl font-bold text-slate-800 mb-2">
+                Cierre Automático
+              </h3>
+              <p className="text-slate-500 text-sm mb-6">
+                Se ha cumplido el horario de cierre programado ({closingTime}{' '}
+                hs).
+                <br />
+                La caja se ha cerrado y el resumen se guardó en el historial.
+              </p>
+              <button
+                onClick={() => setIsAutoCloseAlertOpen(false)}
+                className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800 transition-colors"
+              >
+                Entendido
               </button>
             </div>
           </div>

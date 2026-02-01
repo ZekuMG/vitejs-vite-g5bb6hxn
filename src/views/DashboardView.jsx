@@ -6,19 +6,19 @@ import {
   Package,
   BarChart3,
   Calendar,
-  CalendarDays,
-  Clock,
   CalendarRange,
+  Clock,
   GripVertical,
   Info,
-  Percent
+  Percent,
+  Layers // Icono para Categorías
 } from 'lucide-react';
 import { PAYMENT_METHODS } from '../data';
 
 export default function DashboardView({
   openingBalance,
   totalSales,
-  salesCount,
+  salesCount, // Props heredadas (se usarán como fallback o referencia)
   currentUser,
   setTempOpeningBalance,
   setIsOpeningBalanceModalOpen,
@@ -33,7 +33,10 @@ export default function DashboardView({
   // FILTRO GLOBAL UNIFICADO
   const [globalFilter, setGlobalFilter] = useState('day'); // 'day', 'week', 'month'
 
-  // Estado para Tooltip del Gráfico (Bug Fix)
+  // Switch Productos / Categorías
+  const [rankingMode, setRankingMode] = useState('products'); // 'products', 'categories'
+
+  // Estado para Tooltip del Gráfico
   const [hoveredChartIndex, setHoveredChartIndex] = useState(null);
 
   // Drag & Drop: Widgets Inferiores
@@ -51,51 +54,31 @@ export default function DashboardView({
     'revenue',
     'net',
     'opening',
-    'average', // Nueva tarjeta
+    'average',
     'placeholder'
   ]);
   const [draggedTopItem, setDraggedTopItem] = useState(null);
 
   // =====================================================
-  // 2. HELPERS
+  // 2. LOGICA CENTRALIZADA DE DATOS (CORE)
   // =====================================================
 
-  const normalizeDate = (dateStr) => {
-    if (!dateStr) return null;
-    const cleanDate = dateStr.split(',')[0].trim();
-    const parts = cleanDate.split('/');
-    if (parts.length >= 3) {
-      const day = parseInt(parts[0], 10);
-      const month = parseInt(parts[1], 10);
-      const year = parseInt(parts[2], 10);
-      return { day, month, year, str: `${day}/${month}/${year}` };
-    }
-    return null;
-  };
+  const todayStr = useMemo(() => new Date().toLocaleDateString('es-AR'), []);
+  const currentHour = new Date().getHours();
 
-  const dateToNormalized = (date) => ({
-    day: date.getDate(),
-    month: date.getMonth() + 1,
-    year: date.getFullYear(),
-    str: `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`,
-  });
+  // Helper para normalizar fechas de strings a objetos comparables
+  const parseDate = (dateStr) => {
+    if (!dateStr) return null;
+    // Formato esperado: "dd/mm/yyyy, hh:mm:ss" o "dd/mm/yyyy"
+    const cleanDate = dateStr.split(',')[0].trim(); 
+    const [day, month, year] = cleanDate.split('/').map(Number);
+    if (!day || !month || !year) return null;
+    return new Date(year, month - 1, day);
+  };
 
   const isVentaLog = (log) => {
     const action = log.action || '';
     return action === 'Venta Realizada' || action === 'Nueva Venta';
-  };
-
-  const getVentaTotal = (details) => {
-    if (!details) return 0;
-    if (details.total !== undefined) return Number(details.total) || 0;
-    if (details.items && Array.isArray(details.items)) {
-      return details.items.reduce((sum, item) => {
-        const price = Number(item.price) || 0;
-        const qty = Number(item.qty) || Number(item.quantity) || 0;
-        return sum + price * qty;
-      }, 0);
-    }
-    return 0;
   };
 
   const getProductCost = (productId) => {
@@ -104,419 +87,270 @@ export default function DashboardView({
     return product ? (Number(product.purchasePrice) || 0) : 0;
   };
 
-  // Helper para mensajes de estado vacío
-  const getEmptyStateMessage = () => {
-    switch (globalFilter) {
-      case 'day': return 'Todavía no se realizaron ventas en el Día';
-      case 'week': return 'Todavía no se realizaron ventas en la Semana';
-      case 'month': return 'Todavía no se realizaron ventas en el Mes';
-      default: return 'Todavía no se realizaron ventas';
-    }
-  };
-
-  const currentHour = new Date().getHours();
-  const todayStr = useMemo(() => dateToNormalized(new Date()).str, []);
-
-  // =====================================================
-  // 3. LÓGICA DE ESTADÍSTICAS (KPIs)
-  // =====================================================
-  
-  // Ahora usa globalFilter
-  const calculateStats = (filterType) => {
-    let gross = 0;
-    let net = 0;
-    let count = 0;
-
-    const today = new Date();
-    const currentMonth = today.getMonth() + 1;
-    const currentYear = today.getFullYear();
+  // 2.1 OBTENCIÓN DE DATOS FILTRADOS (La fuente de la verdad para TODOS los widgets)
+  const filteredData = useMemo(() => {
+    const now = new Date();
     const oneDay = 24 * 60 * 60 * 1000;
-
-    const checkDate = (dateObj) => {
+    
+    // Función de filtrado según rango seleccionado
+    const isInRange = (dateObj) => {
       if (!dateObj) return false;
-      if (filterType === 'day') return dateObj.str === todayStr;
-      if (filterType === 'week') {
-        const logDate = new Date(dateObj.year, dateObj.month - 1, dateObj.day);
-        const diffDays = Math.floor((today - logDate) / oneDay);
-        return diffDays >= 0 && diffDays <= 7;
+      const dateStr = dateObj.toLocaleDateString('es-AR');
+      
+      if (globalFilter === 'day') {
+        return dateStr === todayStr;
       }
-      if (filterType === 'month') {
-        return dateObj.month === currentMonth && dateObj.year === currentYear;
+      if (globalFilter === 'week') {
+        // Últimos 7 días
+        const diffTime = now - dateObj;
+        const diffDays = Math.floor(diffTime / oneDay);
+        return diffDays >= 0 && diffDays < 7;
+      }
+      if (globalFilter === 'month') {
+        return dateObj.getMonth() === now.getMonth() && dateObj.getFullYear() === now.getFullYear();
       }
       return false;
     };
 
-    // Procesar Transactions
-    (transactions || []).forEach((tx) => {
-      if (tx.status !== 'voided') {
-        let txDateObj = null;
-        if (tx.date) txDateObj = normalizeDate(tx.date);
-        if (!txDateObj) txDateObj = dateToNormalized(new Date());
+    const validTransactions = [];
+    const processedTxIds = new Set();
 
-        if (checkDate(txDateObj)) {
-          const totalVenta = tx.total || 0;
-          gross += totalVenta;
-          count += 1;
+    // A. Procesar Transacciones (Prioridad)
+    (transactions || []).forEach(tx => {
+      if (tx.status === 'voided') return;
+      const txDate = parseDate(tx.date);
+      if (isInRange(txDate)) {
+        validTransactions.push({
+          source: 'tx',
+          id: tx.id,
+          date: txDate,
+          time: tx.time, // "HH:MM"
+          total: Number(tx.total) || 0,
+          payment: tx.payment,
+          items: tx.items || []
+        });
+        processedTxIds.add(tx.id);
+      }
+    });
 
-          let txCost = 0;
-          if (tx.items) {
-            tx.items.forEach(item => {
-              const qty = Number(item.qty) || Number(item.quantity) || 0;
-              const cost = getProductCost(item.id || item.productId);
-              txCost += cost * qty;
+    // B. Procesar Logs (Solo si no existen en transacciones para evitar duplicados)
+    (dailyLogs || []).forEach(log => {
+      if (isVentaLog(log) && log.details) {
+        const txId = log.details.transactionId;
+        if (!processedTxIds.has(txId)) {
+          const logDate = parseDate(log.date);
+          if (isInRange(logDate)) {
+            // Intentar extraer hora del timestamp o del date string
+            let timeStr = "00:00";
+            if (log.timestamp) timeStr = log.timestamp;
+            
+            validTransactions.push({
+              source: 'log',
+              id: txId || log.id,
+              date: logDate,
+              time: timeStr,
+              total: Number(log.details.total) || 0,
+              payment: log.details.payment || 'Efectivo',
+              items: log.details.items || []
             });
           }
-          net += (totalVenta - txCost);
         }
       }
     });
 
-    // Procesar Logs
-    (dailyLogs || []).forEach((log) => {
-      if (isVentaLog(log) && log.details) {
-        const logDate = normalizeDate(log.date);
-        const txId = log.details.transactionId;
-        const alreadyCounted = (transactions || []).some(tx => tx.id === txId);
-        
-        if (!alreadyCounted && checkDate(logDate)) {
-          const totalVenta = getVentaTotal(log.details);
-          gross += totalVenta;
-          count += 1;
+    return validTransactions;
+  }, [globalFilter, transactions, dailyLogs, todayStr]);
 
-          let logCost = 0;
-          if (log.details.items) {
-            log.details.items.forEach(item => {
-              const qty = Number(item.qty) || Number(item.quantity) || 0;
-              const cost = getProductCost(item.id || item.productId);
-              logCost += cost * qty;
-            });
-          }
-          net += (totalVenta - logCost);
-        }
-      }
+  // =====================================================
+  // 3. CÁLCULO DE ESTADÍSTICAS DERIVADAS
+  // =====================================================
+
+  // 3.1 KPIs (Cards Superiores)
+  const kpiStats = useMemo(() => {
+    let gross = 0;
+    let net = 0;
+    let count = filteredData.length;
+
+    filteredData.forEach(tx => {
+      gross += tx.total;
+      
+      let cost = 0;
+      tx.items.forEach(item => {
+        const qty = Number(item.qty) || Number(item.quantity) || 0;
+        const pCost = getProductCost(item.id || item.productId);
+        cost += pCost * qty;
+      });
+      net += (tx.total - cost);
     });
 
     return { gross, net, count };
-  };
+  }, [filteredData, inventory]);
 
-  // Usamos el filtro global para calcular las stats
-  const currentStats = useMemo(() => calculateStats(globalFilter), [globalFilter, transactions, dailyLogs, todayStr]);
+  const averageTicket = kpiStats.count > 0 ? kpiStats.gross / kpiStats.count : 0;
 
-  const displayTotalSales = totalSales > 0 ? totalSales : currentStats.gross;
-
-  // Calculo de Ticket Promedio
-  const averageTicket = currentStats.count > 0 ? currentStats.gross / currentStats.count : 0;
-
-  // =====================================================
-  // 4. LÓGICA DE GRÁFICOS
-  // =====================================================
-
-  const salesByHour = useMemo(() => {
-    const timeRanges = [
-      { label: '9-12', start: 9, end: 12, sales: 0, count: 0 },
-      { label: '12-14', start: 12, end: 14, sales: 0, count: 0 },
-      { label: '16-19', start: 16, end: 19, sales: 0, count: 0 },
-      { label: '19-21', start: 19, end: 21, sales: 0, count: 0 },
-    ];
-
-    (dailyLogs || []).forEach((log) => {
-      if (isVentaLog(log) && log.details) {
-        const logDate = normalizeDate(log.date);
-        if (logDate && logDate.str === todayStr) {
-          const timeParts = log.timestamp ? log.timestamp.split(':') : [];
-          if (timeParts.length >= 1) {
-            const hour = parseInt(timeParts[0], 10);
-            timeRanges.forEach((range) => {
-              if (hour >= range.start && hour < range.end) {
-                range.sales += getVentaTotal(log.details);
-                range.count += 1;
-              }
-            });
-          }
-        }
-      }
-    });
-
-    (transactions || []).forEach((tx) => {
-      if (tx.status !== 'voided') {
-        let hour = null;
-        if (tx.time) {
-          const timeParts = tx.time.split(':');
-          hour = parseInt(timeParts[0], 10);
-        } else if (tx.date && tx.date.includes(',')) {
-          const dateTimeParts = tx.date.split(', ');
-          if (dateTimeParts.length >= 2) {
-            const timeParts = dateTimeParts[1].split(':');
-            hour = parseInt(timeParts[0], 10);
-          }
-        }
-        if (hour !== null && !isNaN(hour)) {
-          timeRanges.forEach((range) => {
-            if (hour >= range.start && hour < range.end) {
-              range.sales += tx.total || 0;
-              range.count += 1;
-            }
-          });
-        }
-      }
-    });
-
-    timeRanges.forEach((range) => {
-      range.isCurrent = currentHour >= range.start && currentHour < range.end;
-    });
-
-    return timeRanges;
-  }, [dailyLogs, transactions, currentHour, todayStr]);
-
-  const salesByDay = useMemo(() => {
-    const today = new Date();
-    const days = [];
-    let daysAdded = 0;
-    let offset = 0;
-
-    // MODIFICADO: Eliminada la restricción de Domingos (if date.getDay() !== 0)
-    // para que se muestren correctamente las ventas de toda la semana.
-    while (daysAdded < 7) {
-      const date = new Date(today);
-      date.setDate(date.getDate() - offset);
-      
-      const normalized = dateToNormalized(date);
-      days.unshift({
-        ...normalized,
-        label: `${normalized.day}/${normalized.month}`,
-        dayName: date.toLocaleDateString('es-AR', { weekday: 'short' }),
-        sales: 0,
-        count: 0,
-        isToday: offset === 0,
-      });
-      daysAdded++;
-      
-      offset++;
-    }
-
-    (dailyLogs || []).forEach((log) => {
-      if (isVentaLog(log) && log.details && log.date) {
-        const logDate = normalizeDate(log.date);
-        if (logDate) {
-          const dayIndex = days.findIndex((d) => d.str === logDate.str);
-          if (dayIndex !== -1) {
-            days[dayIndex].sales += getVentaTotal(log.details);
-            days[dayIndex].count += 1;
-          }
-        }
-      }
-    });
-
-    const todayData = days.find((d) => d.isToday);
-    if (todayData) {
-      (transactions || []).forEach((tx) => {
-        if (tx.status !== 'voided') {
-          todayData.sales += tx.total || 0;
-          todayData.count += 1;
-        }
-      });
-    }
-
-    return days;
-  }, [dailyLogs, transactions]);
-
-  const salesByWeek = useMemo(() => {
-    const today = new Date();
-    const currentMonth = today.getMonth() + 1;
-    const currentYear = today.getFullYear();
-    const lastDay = new Date(currentYear, currentMonth, 0).getDate();
-    const todayDay = today.getDate();
-
-    const weeks = [
-      { label: '1-7', start: 1, end: 7, sales: 0, count: 0 },
-      { label: '8-14', start: 8, end: 14, sales: 0, count: 0 },
-      { label: '15-21', start: 15, end: 21, sales: 0, count: 0 },
-      { label: `22-${lastDay}`, start: 22, end: lastDay, sales: 0, count: 0 },
-    ];
-
-    weeks.forEach((week) => {
-      week.isCurrent = todayDay >= week.start && todayDay <= week.end;
-    });
-
-    (dailyLogs || []).forEach((log) => {
-      if (isVentaLog(log) && log.details && log.date) {
-        const logDate = normalizeDate(log.date);
-        if (logDate && logDate.month === currentMonth && logDate.year === currentYear) {
-          weeks.forEach((week) => {
-            if (logDate.day >= week.start && logDate.day <= week.end) {
-              week.sales += getVentaTotal(log.details);
-              week.count += 1;
-            }
-          });
-        }
-      }
-    });
-
-    (transactions || []).forEach((tx) => {
-      if (tx.status !== 'voided') {
-        weeks.forEach((week) => {
-          if (todayDay >= week.start && todayDay <= week.end) {
-            week.sales += tx.total || 0;
-            week.count += 1;
-          }
-        });
-      }
-    });
-
-    return weeks;
-  }, [dailyLogs, transactions]);
-
-  // Selección de datos para el gráfico basado en globalFilter
+  // 3.2 DATOS PARA EL GRÁFICO (Chart)
   const chartData = useMemo(() => {
-    switch (globalFilter) {
-      case 'day': return salesByHour;
-      case 'week': return salesByDay;
-      case 'month': return salesByWeek;
-      default: return salesByDay;
+    // A. Gráfico por Horas (Solo vista DIARIA)
+    if (globalFilter === 'day') {
+      const ranges = [
+        { label: '9-12', start: 9, end: 12, sales: 0, count: 0 },
+        { label: '12-14', start: 12, end: 14, sales: 0, count: 0 },
+        { label: '14-17', start: 14, end: 17, sales: 0, count: 0 }, // Agregado rango siesta
+        { label: '17-21', start: 17, end: 21, sales: 0, count: 0 },
+        { label: '21+', start: 21, end: 24, sales: 0, count: 0 },
+      ];
+
+      filteredData.forEach(tx => {
+        if (!tx.time) return;
+        const hour = parseInt(tx.time.split(':')[0], 10);
+        const range = ranges.find(r => hour >= r.start && hour < r.end);
+        if (range) {
+          range.sales += tx.total;
+          range.count += 1;
+        }
+      });
+
+      return ranges.map(r => ({ ...r, isCurrent: currentHour >= r.start && currentHour < r.end }));
     }
-  }, [globalFilter, salesByHour, salesByDay, salesByWeek]);
+
+    // B. Gráfico por Días (Vista SEMANAL o MENSUAL)
+    // Generar etiquetas dinámicas
+    const daysMap = new Map();
+    const result = [];
+    const now = new Date();
+    
+    // Si es semana, mostramos últimos 7 días. Si es mes, agrupamos por semanas o mostramos días clave.
+    // Para simplificar y mantener el estilo visual, usaremos lógica de días para ambos por ahora, 
+    // pero agrupando si son muchos datos en el futuro.
+    
+    const daysToShow = globalFilter === 'week' ? 7 : 30; // 30 días aprox para mes
+    
+    // Inicializar estructura
+    for (let i = daysToShow - 1; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const key = d.toLocaleDateString('es-AR');
+      const label = `${d.getDate()}/${d.getMonth()+1}`;
+      const dayName = d.toLocaleDateString('es-AR', { weekday: 'short' });
+      
+      daysMap.set(key, { 
+        label, 
+        dayName, 
+        sales: 0, 
+        count: 0, 
+        fullDate: key,
+        isToday: i === 0 
+      });
+    }
+
+    // Llenar datos
+    filteredData.forEach(tx => {
+      const key = tx.date.toLocaleDateString('es-AR');
+      if (daysMap.has(key)) {
+        const entry = daysMap.get(key);
+        entry.sales += tx.total;
+        entry.count += 1;
+      }
+    });
+
+    // Convertir a array. Si es mes, comprimir en 4 semanas para que entre en el gráfico
+    const dayArray = Array.from(daysMap.values());
+    
+    if (globalFilter === 'month') {
+        // Agrupar en 4 semanas
+        const weeks = [
+            { label: 'Sem 1', sales: 0, count: 0, isCurrent: false },
+            { label: 'Sem 2', sales: 0, count: 0, isCurrent: false },
+            { label: 'Sem 3', sales: 0, count: 0, isCurrent: false },
+            { label: 'Sem 4+', sales: 0, count: 0, isCurrent: true },
+        ];
+        
+        // Distribuir equitativamente (aprox)
+        dayArray.forEach((d, idx) => {
+            const weekIdx = Math.min(Math.floor(idx / 7), 3);
+            weeks[weekIdx].sales += d.sales;
+            weeks[weekIdx].count += d.count;
+        });
+        return weeks;
+    }
+
+    return dayArray;
+  }, [globalFilter, filteredData, currentHour]);
 
   const maxSales = useMemo(() => {
-    const allSales = chartData.map((d) => d.sales);
-    const max = Math.max(...allSales);
+    const max = Math.max(...chartData.map(d => d.sales));
     return max > 0 ? max : 1;
   }, [chartData]);
 
-  const yAxisLabels = useMemo(() => {
-    if (maxSales <= 0) return ['$0', '$0', '$0', '$0'];
-    return [
-      `$${Math.round(maxSales).toLocaleString()}`,
-      `$${Math.round(maxSales * 0.66).toLocaleString()}`,
-      `$${Math.round(maxSales * 0.33).toLocaleString()}`,
-      '$0',
-    ];
-  }, [maxSales]);
-
-  // Títulos dinámicos basados en globalFilter
-  const chartInfo = useMemo(() => {
-    switch (globalFilter) {
-      case 'day': return { title: 'Estadísticas de Ventas', subtitle: 'Por horario' };
-      case 'week': return { title: 'Estadísticas de Ventas', subtitle: 'Últimos 7 días' };
-      case 'month': return { title: 'Estadísticas de Ventas', subtitle: 'Por semana' };
-      default: return { title: 'Estadísticas de Ventas', subtitle: '' };
-    }
-  }, [globalFilter]);
-
-  const topProductsToday = useMemo(() => {
-    const productSales = {};
-    (transactions || []).forEach((tx) => {
-      if (tx.items && tx.status !== 'voided') {
-        tx.items.forEach((item) => {
-          const key = item.title || item.id;
-          if (!productSales[key]) productSales[key] = { title: item.title, qty: 0, revenue: 0 };
-          productSales[key].qty += item.qty || item.quantity || 0;
-          productSales[key].revenue += (item.price || 0) * (item.qty || item.quantity || 0);
-        });
-      }
+  // 3.3 MÉTODOS DE PAGO (Sincronizado)
+  const paymentStats = useMemo(() => {
+    return PAYMENT_METHODS.map(method => {
+      const total = filteredData
+        .filter(tx => tx.payment === method.id)
+        .reduce((sum, tx) => sum + tx.total, 0);
+      return { ...method, total };
     });
-    (dailyLogs || []).forEach((log) => {
-      if (isVentaLog(log) && log.details && log.details.items) {
-        const logDate = normalizeDate(log.date);
-        if (logDate && logDate.str === todayStr) {
-          log.details.items.forEach((item) => {
-            const key = item.title || item.id;
-            if (!productSales[key]) productSales[key] = { title: item.title, qty: 0, revenue: 0 };
-            productSales[key].qty += item.qty || item.quantity || 0;
-            productSales[key].revenue += (item.price || 0) * (item.qty || item.quantity || 0);
-          });
+  }, [filteredData]);
+
+  // 3.4 RANKING (Productos o Categorías)
+  const rankingStats = useMemo(() => {
+    const statsMap = {}; // { 'Nombre': { qty, revenue } }
+
+    filteredData.forEach(tx => {
+      tx.items.forEach(item => {
+        const qty = Number(item.qty) || Number(item.quantity) || 0;
+        const revenue = (Number(item.price) || 0) * qty;
+
+        if (rankingMode === 'products') {
+            const key = item.title || 'Desconocido';
+            if (!statsMap[key]) statsMap[key] = { name: key, qty: 0, revenue: 0 };
+            statsMap[key].qty += qty;
+            statsMap[key].revenue += revenue;
+        } else {
+            // Categories logic
+            // Manejar array o string simple
+            let cats = [];
+            if (Array.isArray(item.categories) && item.categories.length > 0) {
+                cats = item.categories;
+            } else if (item.category) {
+                cats = [item.category];
+            } else {
+                cats = ['Sin Categoría'];
+            }
+
+            cats.forEach(cat => {
+                if (!statsMap[cat]) statsMap[cat] = { name: cat, qty: 0, revenue: 0 };
+                statsMap[cat].qty += qty;
+                statsMap[cat].revenue += revenue;
+            });
         }
-      }
+      });
     });
-    return Object.values(productSales).sort((a, b) => b.qty - a.qty).slice(0, 5);
-  }, [transactions, dailyLogs, todayStr]);
 
-  const topProductsMonth = useMemo(() => {
-    const productSales = {};
-    const today = new Date();
-    const currentMonth = today.getMonth() + 1;
-    const currentYear = today.getFullYear();
+    return Object.values(statsMap)
+        .sort((a, b) => b.qty - a.qty) // Ordenar por cantidad vendida
+        .slice(0, 5); // Top 5
+  }, [filteredData, rankingMode]);
 
-    (dailyLogs || []).forEach((log) => {
-      if (isVentaLog(log) && log.details && log.details.items) {
-        const logDate = normalizeDate(log.date);
-        if (logDate && logDate.month === currentMonth && logDate.year === currentYear) {
-          log.details.items.forEach((item) => {
-            const key = item.title || item.id;
-            if (!productSales[key]) productSales[key] = { title: item.title, qty: 0, revenue: 0 };
-            productSales[key].qty += item.qty || item.quantity || 0;
-            productSales[key].revenue += (item.price || 0) * (item.qty || item.quantity || 0);
-          });
-        }
-      }
-    });
-    (transactions || []).forEach((tx) => {
-      if (tx.items && tx.status !== 'voided') {
-        tx.items.forEach((item) => {
-          const key = item.title || item.id;
-          if (!productSales[key]) productSales[key] = { title: item.title, qty: 0, revenue: 0 };
-          productSales[key].qty += item.qty || item.quantity || 0;
-          productSales[key].revenue += (item.price || 0) * (item.qty || item.quantity || 0);
-        });
-      }
-    });
-    return Object.values(productSales).sort((a, b) => b.qty - a.qty).slice(0, 5);
-  }, [dailyLogs, transactions]);
-
-  // Top Products ahora depende de globalFilter (simplificado day vs month/week)
-  const topProducts = globalFilter === 'day' ? topProductsToday : topProductsMonth;
-
-  // MODIFICADO: Ahora incluye productos con stock 0 (AGOTADOS)
+  // 3.5 STOCK BAJO (Independiente del filtro temporal, depende del inventario actual)
   const lowStockProducts = useMemo(() => {
     if (!inventory) return [];
-    // Filtramos stock < 10 incluyendo 0
-    return inventory.filter((p) => p.stock < 10).slice(0, 5);
+    return inventory.filter((p) => p.stock < 10).sort((a,b) => a.stock - b.stock).slice(0, 5);
   }, [inventory]);
 
   // =====================================================
-  // 5. DRAG & DROP HANDLERS (SEPARADOS)
+  // 4. RENDERIZADORES
   // =====================================================
-
-  // Bottom Widgets Handlers
-  const handleDragStart = (e, item) => {
-    setDraggedItem(item);
-    e.dataTransfer.effectAllowed = 'move';
+  
+  const getEmptyStateMessage = () => {
+    switch (globalFilter) {
+      case 'day': return 'Sin ventas hoy';
+      case 'week': return 'Sin ventas esta semana';
+      case 'month': return 'Sin ventas este mes';
+      default: return 'Sin datos';
+    }
   };
 
-  const handleDragOver = (e, index) => {
-    e.preventDefault();
-    const draggedOverItem = widgetOrder[index];
-    if (draggedItem === draggedOverItem) return;
-    const newOrder = widgetOrder.filter(item => item !== draggedItem);
-    newOrder.splice(index, 0, draggedItem);
-    setWidgetOrder(newOrder);
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    setDraggedItem(null);
-  };
-
-  // Top Cards Handlers (NUEVO)
-  const handleDragStartTop = (e, item) => {
-    setDraggedTopItem(item);
-    e.dataTransfer.effectAllowed = 'move';
-  };
-
-  const handleDragOverTop = (e, index) => {
-    e.preventDefault();
-    const draggedOverItem = topWidgetOrder[index];
-    if (draggedTopItem === draggedOverItem) return;
-    const newOrder = topWidgetOrder.filter(item => item !== draggedTopItem);
-    newOrder.splice(index, 0, draggedTopItem);
-    setTopWidgetOrder(newOrder);
-  };
-
-  const handleDropTop = (e) => {
-    e.preventDefault();
-    setDraggedTopItem(null);
-  };
-
-  // Switch Global
   const GlobalTimeSwitch = () => (
     <div className="flex gap-1 bg-white border border-slate-200 p-0.5 rounded-lg">
       {[
@@ -542,19 +376,23 @@ export default function DashboardView({
     </div>
   );
 
-  // Renderizador de Tarjetas Superiores (KPIs)
   const renderTopWidget = (key) => {
+    // Título dinámico
+    const getPeriodText = (prefix) => {
+        if (globalFilter === 'day') return `${prefix} Diario`;
+        if (globalFilter === 'week') return `${prefix} Semanal`;
+        return `${prefix} Mensual`;
+    };
+
     switch (key) {
       case 'sales':
         return (
           <div className="bg-white p-4 rounded-xl shadow-sm border border-blue-100 relative overflow-hidden flex flex-col justify-between h-32">
             <div className="flex justify-between items-start z-10">
-              <span className="text-[10px] font-bold text-blue-400 uppercase">
-                {globalFilter === 'day' ? 'Ventas del día' : globalFilter === 'week' ? 'Venta Semanal' : 'Venta Mensual'}
-              </span>
+              <span className="text-[10px] font-bold text-blue-400 uppercase">{getPeriodText('Ventas')}</span>
               <Package size={14} className="text-blue-500" />
             </div>
-            <span className="text-2xl font-bold text-blue-600 z-10">{currentStats.count}</span>
+            <span className="text-2xl font-bold text-blue-600 z-10">{kpiStats.count}</span>
             <div className="absolute bottom-0 left-0 w-full h-1 bg-blue-400"></div>
           </div>
         );
@@ -562,12 +400,10 @@ export default function DashboardView({
         return (
           <div className="bg-white p-4 rounded-xl shadow-sm border border-fuchsia-100 relative overflow-hidden flex flex-col justify-between h-32">
             <div className="flex justify-between items-start z-10">
-              <span className="text-[10px] font-bold text-fuchsia-400 uppercase">
-                {globalFilter === 'day' ? 'Ingreso Diario' : globalFilter === 'week' ? 'Ingreso Semanal' : 'Ingreso Mensual'}
-              </span>
+              <span className="text-[10px] font-bold text-fuchsia-400 uppercase">{getPeriodText('Ingreso')}</span>
               <TrendingUp size={14} className="text-fuchsia-500" />
             </div>
-            <span className="text-2xl font-bold text-fuchsia-600 z-10">${currentStats.gross.toLocaleString()}</span>
+            <span className="text-2xl font-bold text-fuchsia-600 z-10">${kpiStats.gross.toLocaleString()}</span>
             <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-fuchsia-400 to-fuchsia-600"></div>
           </div>
         );
@@ -578,7 +414,7 @@ export default function DashboardView({
               <span className="text-[10px] font-bold text-emerald-500 uppercase">Ganancia Neta</span>
               <DollarSign size={14} className="text-emerald-500" />
             </div>
-            <span className="text-2xl font-bold text-emerald-600 z-10">${currentStats.net.toLocaleString()}</span>
+            <span className="text-2xl font-bold text-emerald-600 z-10">${kpiStats.net.toLocaleString()}</span>
             <div className="absolute bottom-0 left-0 w-full h-1 bg-emerald-400"></div>
           </div>
         );
@@ -603,7 +439,7 @@ export default function DashboardView({
             <div className="absolute bottom-0 left-0 w-full h-1 bg-slate-300"></div>
           </div>
         );
-      case 'average': // NUEVA TARJETA
+      case 'average':
         return (
           <div className="bg-white p-4 rounded-xl shadow-sm border border-indigo-100 relative overflow-hidden flex flex-col justify-between h-32">
             <div className="flex justify-between items-start z-10">
@@ -625,7 +461,6 @@ export default function DashboardView({
     }
   };
 
-  // Renderizador de Widgets Inferiores
   const renderWidget = (widgetKey) => {
     switch(widgetKey) {
       case 'chart':
@@ -635,83 +470,81 @@ export default function DashboardView({
               <div>
                 <h3 className="font-bold text-slate-800 flex items-center gap-2">
                   <BarChart3 size={18} className="text-fuchsia-500" />
-                  {chartInfo.title}
+                  Evolución de Ventas
                 </h3>
-                <span className="text-xs text-slate-400">{chartInfo.subtitle}</span>
+                <span className="text-xs text-slate-400">
+                    {globalFilter === 'day' ? 'Por horario' : globalFilter === 'week' ? 'Últimos 7 días' : 'Por semana'}
+                </span>
               </div>
             </div>
-            {/* Gráfico */}
+            
             <div className="flex">
-              <div className="flex flex-col justify-between pr-2 py-1 text-right" style={{ height: '180px', minWidth: '65px' }}>
-                {yAxisLabels.map((label, idx) => (
-                  <span key={idx} className="text-[9px] text-slate-400 whitespace-nowrap">{label}</span>
-                ))}
+              {/* Eje Y */}
+              <div className="flex flex-col justify-between pr-2 py-1 text-right" style={{ height: '180px', minWidth: '50px' }}>
+                <span className="text-[9px] text-slate-400">${maxSales.toLocaleString()}</span>
+                <span className="text-[9px] text-slate-400">${Math.round(maxSales/2).toLocaleString()}</span>
+                <span className="text-[9px] text-slate-400">$0</span>
               </div>
+              
               <div className="flex-1 relative">
+                {/* Grid Lines */}
                 <div className="absolute inset-0 flex flex-col justify-between pointer-events-none" style={{ height: '180px' }}>
-                  <div className="border-t border-slate-200"></div>
-                  <div className="border-t border-dashed border-slate-100"></div>
+                  <div className="border-t border-slate-100"></div>
                   <div className="border-t border-dashed border-slate-100"></div>
                   <div className="border-t border-slate-200"></div>
                 </div>
                 
-                {/* Mensaje de estado vacío en el gráfico (CORREGIDO & ESTILIZADO) */}
+                {/* Empty State */}
                 {!chartData.some(d => d.sales > 0) && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-white/40 backdrop-blur-[2px]">
-                    <div className="bg-slate-50 p-3 rounded-full mb-2 shadow-sm border border-slate-100">
-                      <BarChart3 size={24} className="text-slate-300" />
-                    </div>
-                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">
+                  <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-white/60 backdrop-blur-[1px]">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wide bg-white px-2 py-1 rounded border">
                       {getEmptyStateMessage()}
                     </span>
                   </div>
                 )}
 
+                {/* Bars */}
                 <div className="flex items-end justify-around gap-2 relative" style={{ height: '180px' }}>
                   {chartData.map((item, idx) => {
                     const heightPercent = maxSales > 0 ? (item.sales / maxSales) * 100 : 0;
-                    const isCurrent = item.isCurrent || (globalFilter === 'week' && item.isToday);
-                    const hasData = item.sales > 0;
-                    // Bug Fix: Usamos estado hoveredChartIndex en lugar de CSS puro para evitar overlap
                     const isHovered = hoveredChartIndex === idx;
 
                     return (
                       <div 
                         key={idx} 
-                        className="flex-1 h-full flex flex-col items-center justify-end relative"
+                        className="flex-1 h-full flex flex-col items-center justify-end relative group"
                         onMouseEnter={() => setHoveredChartIndex(idx)}
                         onMouseLeave={() => setHoveredChartIndex(null)}
                       >
+                        {/* Tooltip */}
                         <div 
-                          className="absolute -top-10 left-1/2 -translate-x-1/2 transition-opacity bg-slate-800 text-white text-[10px] px-2 py-1 rounded whitespace-nowrap z-30 shadow-lg pointer-events-none"
-                          style={{ opacity: isHovered ? 1 : 0 }}
+                          className={`absolute -top-10 left-1/2 -translate-x-1/2 transition-all duration-200 bg-slate-800 text-white text-[10px] px-2 py-1 rounded whitespace-nowrap z-30 shadow-lg pointer-events-none ${isHovered ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}
                         >
                           <p className="font-bold">${item.sales.toLocaleString()}</p>
-                          <p className="text-slate-300">{item.count} pedidos</p>
+                          <p className="text-slate-300">{item.count} ops</p>
                         </div>
-                        <div className={`w-full max-w-[36px] rounded-t transition-all duration-500 cursor-pointer ${
-                          isCurrent ? 'bg-fuchsia-500 hover:bg-fuchsia-600 shadow-md' : hasData ? 'bg-fuchsia-300 hover:bg-fuchsia-400' : 'bg-slate-100'
-                        }`} style={{ height: hasData ? `${Math.max(heightPercent, 4)}%` : '3px' }} />
+                        
+                        {/* Bar */}
+                        <div 
+                            className={`w-full max-w-[40px] rounded-t transition-all duration-500 ${
+                              item.isCurrent ? 'bg-fuchsia-500' : item.sales > 0 ? 'bg-fuchsia-300' : 'bg-slate-100'
+                            } group-hover:bg-fuchsia-400`} 
+                            style={{ height: item.sales > 0 ? `${Math.max(heightPercent, 5)}%` : '4px' }} 
+                        />
                       </div>
                     );
                   })}
                 </div>
+                
+                {/* Eje X Labels */}
                 <div className="flex justify-around gap-2 mt-2 pt-2 border-t border-slate-200">
-                  {chartData.map((item, idx) => {
-                    const isCurrent = item.isCurrent || (globalFilter === 'week' && item.isToday);
-                    return (
-                      <div key={idx} className="flex-1 text-center">
-                        <p className={`text-[10px] font-bold ${isCurrent ? 'text-fuchsia-600' : 'text-slate-600'}`}>{item.label}</p>
-                        <p className={`text-[9px] ${isCurrent ? 'text-fuchsia-400' : 'text-slate-400'}`}>{globalFilter === 'week' ? item.dayName : globalFilter === 'day' ? 'hs' : 'días'}</p>
-                      </div>
-                    );
-                  })}
+                  {chartData.map((item, idx) => (
+                    <div key={idx} className="flex-1 text-center">
+                      <p className={`text-[9px] font-bold ${item.isCurrent ? 'text-fuchsia-600' : 'text-slate-500'}`}>{item.label}</p>
+                    </div>
+                  ))}
                 </div>
               </div>
-            </div>
-            <div className="mt-3 pt-3 border-t flex justify-between text-xs">
-              <span className="text-slate-500">Total: <span className="font-bold text-slate-700">${chartData.reduce((acc, d) => acc + d.sales, 0).toLocaleString()}</span></span>
-              <span className="text-slate-500">Pedidos: <span className="font-bold text-slate-700">{chartData.reduce((acc, d) => acc + d.count, 0)}</span></span>
             </div>
           </div>
         );
@@ -721,25 +554,37 @@ export default function DashboardView({
           <div className="bg-white p-5 rounded-xl shadow-sm border h-full">
             <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-4">
               <DollarSign size={18} className="text-green-500" />
-              Por Método de Pago
+              Pagos ({globalFilter === 'day' ? 'Hoy' : globalFilter === 'week' ? 'Semana' : 'Mes'})
             </h3>
             <div className="space-y-3">
-              {PAYMENT_METHODS.map((m) => {
-                const totalMethod = (transactions || []).filter((t) => t.payment === m.id && t.status !== 'voided').reduce((acc, t) => acc + t.total, 0);
-                const percent = displayTotalSales > 0 ? (totalMethod / displayTotalSales) * 100 : 0;
+              {paymentStats.map((m) => {
+                const totalFiltered = kpiStats.gross; // Total filtrado actual
+                const percent = totalFiltered > 0 ? (m.total / totalFiltered) * 100 : 0;
+                
                 return (
                   <div key={m.id}>
                     <div className="flex justify-between text-xs mb-1">
-                      <span className="font-bold text-slate-600">{m.label}</span>
-                      <span className="text-slate-800 font-bold">${totalMethod.toLocaleString()}</span>
+                      <span className="font-bold text-slate-600 flex items-center gap-2">
+                        {m.label}
+                        {m.total > 0 && <span className="text-[9px] text-slate-400">({Math.round(percent)}%)</span>}
+                      </span>
+                      <span className={`font-bold ${m.total > 0 ? 'text-slate-800' : 'text-slate-300'}`}>
+                        ${m.total.toLocaleString()}
+                      </span>
                     </div>
                     <div className="w-full bg-slate-100 rounded-full h-2">
-                      <div className="bg-fuchsia-500 h-2 rounded-full transition-all" style={{ width: `${percent}%` }} />
+                      <div 
+                        className={`h-2 rounded-full transition-all duration-700 ${m.total > 0 ? 'bg-green-500' : 'bg-transparent'}`} 
+                        style={{ width: `${percent}%` }} 
+                      />
                     </div>
                   </div>
                 );
               })}
             </div>
+            {kpiStats.gross === 0 && (
+                <p className="text-center text-xs text-slate-400 mt-6 italic">No hay pagos registrados en este período</p>
+            )}
           </div>
         );
 
@@ -748,34 +593,52 @@ export default function DashboardView({
           <div className="bg-white p-5 rounded-xl shadow-sm border h-full">
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                <TrendingUp size={18} className="text-green-500" />
-                Productos Más Vendidos
+                {rankingMode === 'products' ? <TrendingUp size={18} className="text-amber-500" /> : <Layers size={18} className="text-indigo-500" />}
+                Más Vendidos
               </h3>
+              
+              {/* SWITCH PRODUCTOS / CATEGORIAS */}
+              <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+                 <button 
+                    onClick={() => setRankingMode('products')}
+                    className={`px-2 py-1 text-[10px] rounded font-bold transition-all ${rankingMode === 'products' ? 'bg-white shadow text-amber-600' : 'text-slate-400 hover:text-slate-600'}`}
+                 >
+                    Productos
+                 </button>
+                 <button 
+                    onClick={() => setRankingMode('categories')}
+                    className={`px-2 py-1 text-[10px] rounded font-bold transition-all ${rankingMode === 'categories' ? 'bg-white shadow text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+                 >
+                    Categorias
+                 </button>
+              </div>
             </div>
-            {topProducts.length > 0 ? (
+
+            {rankingStats.length > 0 ? (
               <div className="space-y-2">
-                {topProducts.map((product, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-2 bg-slate-50 rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${idx === 0 ? 'bg-amber-400 text-white' : idx === 1 ? 'bg-slate-400 text-white' : idx === 2 ? 'bg-amber-700 text-white' : 'bg-slate-200 text-slate-600'}`}>
-                        {idx + 1}
+                {rankingStats.map((item, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-2 bg-slate-50 rounded-lg border border-slate-100">
+                    <div className="flex items-center gap-3 overflow-hidden">
+                      <span className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                        idx === 0 ? 'bg-amber-100 text-amber-700 border border-amber-200' : 
+                        idx === 1 ? 'bg-slate-200 text-slate-600' : 
+                        idx === 2 ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-400'
+                      }`}>
+                        #{idx + 1}
                       </span>
-                      <span className="text-sm font-medium text-slate-700 truncate max-w-[150px]">{product.title}</span>
+                      <span className="text-xs font-bold text-slate-700 truncate">{item.name}</span>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm font-bold text-slate-800">{product.qty} uds</p>
-                      <p className="text-[10px] text-slate-400">${product.revenue.toLocaleString()}</p>
+                    <div className="text-right shrink-0">
+                      <p className="text-xs font-bold text-slate-800">{item.qty} un.</p>
+                      <p className="text-[9px] text-slate-400">${item.revenue.toLocaleString()}</p>
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              // MODIFICADO: Mensaje de estado vacío personalizado
-              <div className="flex flex-col items-center justify-center py-8">
-                <Package size={32} className="text-slate-200 mb-2" />
-                <p className="text-xs font-bold text-slate-400 text-center uppercase max-w-[200px]">
-                  {getEmptyStateMessage()}
-                </p>
+              <div className="flex flex-col items-center justify-center py-8 opacity-50">
+                <Package size={32} className="text-slate-300 mb-2" />
+                <p className="text-xs font-bold text-slate-400">{getEmptyStateMessage()}</p>
               </div>
             )}
           </div>
@@ -785,27 +648,32 @@ export default function DashboardView({
         return (
           <div className="bg-white p-5 rounded-xl shadow-sm border h-full">
             <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-4">
-              <Package size={18} className="text-amber-500" />
-              Stock Bajo / Agotado
-              {lowStockProducts.length > 0 && <span className="bg-amber-100 text-amber-700 text-[10px] px-2 py-0.5 rounded-full font-bold">{lowStockProducts.length}</span>}
+              <Package size={18} className="text-red-500" />
+              Alerta de Stock
+              {lowStockProducts.length > 0 && <span className="bg-red-100 text-red-700 text-[10px] px-2 py-0.5 rounded-full font-bold ml-auto">{lowStockProducts.length}</span>}
             </h3>
             {lowStockProducts.length > 0 ? (
               <div className="space-y-2">
-                {/* MODIFICADO: Renderizado Condicional AGOTADO vs Low Stock */}
                 {lowStockProducts.map((product) => {
                   const isOutOfStock = product.stock === 0;
                   return (
-                    <div key={product.id} className={`flex items-center justify-between p-2 rounded-lg border ${isOutOfStock ? 'bg-red-50 border-red-100' : 'bg-amber-50 border-amber-100'}`}>
-                      <span className="text-sm font-medium text-slate-700 truncate max-w-[300px]">{product.title}</span>
-                      <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${isOutOfStock ? 'bg-red-200 text-red-800' : 'bg-amber-200 text-amber-800'}`}>
-                        {isOutOfStock ? 'AGOTADO' : product.stock}
+                    <div key={product.id} className={`flex items-center justify-between p-2 rounded-lg border ${isOutOfStock ? 'bg-red-50 border-red-100' : 'bg-orange-50 border-orange-100'}`}>
+                      <span className="text-xs font-bold text-slate-700 truncate max-w-[180px]">{product.title}</span>
+                      <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${isOutOfStock ? 'bg-red-200 text-red-800' : 'bg-orange-200 text-orange-800'}`}>
+                        {isOutOfStock ? 'AGOTADO' : `${product.stock} un.`}
                       </span>
                     </div>
                   );
                 })}
               </div>
             ) : (
-              <p className="text-sm text-slate-400 text-center py-4">Todo el stock está en niveles normales</p>
+              <div className="flex flex-col items-center justify-center py-8">
+                 <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-2">
+                    <Package size={20} className="text-green-600" />
+                 </div>
+                 <p className="text-xs font-bold text-green-700">Stock Saludable</p>
+                 <p className="text-[10px] text-green-600">No hay productos críticos</p>
+              </div>
             )}
           </div>
         );
@@ -814,35 +682,51 @@ export default function DashboardView({
   };
 
   // =====================================================
-  // 6. RENDER PRINCIPAL
+  // 5. RENDER PRINCIPAL
   // =====================================================
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-6 max-w-7xl mx-auto pb-10">
       {/* HEADER & SWITCH GLOBAL */}
-      <div className="flex flex-col sm:flex-row justify-between items-center">
-        <h2 className="text-2xl font-bold text-slate-800">Panel de Control</h2>
+      <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+        <div>
+            <h2 className="text-2xl font-bold text-slate-800">Panel de Control</h2>
+            <p className="text-xs text-slate-400">Resumen de operaciones en tiempo real</p>
+        </div>
         <GlobalTimeSwitch />
       </div>
 
-      {/* Tarjetas principales (KPIs) - AHORA DRAGGABLE */}
+      {/* Tarjetas principales (KPIs) - Draggable */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3">
         {topWidgetOrder.map((widgetKey, index) => (
           <div
             key={widgetKey}
             draggable
-            onDragStart={(e) => handleDragStartTop(e, widgetKey)}
-            onDragOver={(e) => handleDragOverTop(e, index)}
-            onDrop={handleDropTop}
+            onDragStart={(e) => {
+                setDraggedTopItem(widgetKey);
+                e.dataTransfer.effectAllowed = 'move';
+            }}
+            onDragOver={(e) => {
+                e.preventDefault();
+                if (draggedTopItem === widgetKey) return;
+                // Simple reorder logic on hover
+                const currentIdx = topWidgetOrder.indexOf(draggedTopItem);
+                if (currentIdx !== -1 && currentIdx !== index) {
+                     const newOrder = [...topWidgetOrder];
+                     newOrder.splice(currentIdx, 1);
+                     newOrder.splice(index, 0, draggedTopItem);
+                     setTopWidgetOrder(newOrder);
+                }
+            }}
+            onDrop={(e) => {
+                e.preventDefault();
+                setDraggedTopItem(null);
+            }}
             className={`transition-all duration-200 ${
-              draggedTopItem === widgetKey ? 'opacity-40 scale-95 border-2 border-dashed border-slate-300 rounded-xl' : 'opacity-100'
+              draggedTopItem === widgetKey ? 'opacity-40 scale-95' : 'opacity-100'
             }`}
           >
              <div className="group relative h-full">
-                {/* Drag Handle Top */}
-                <div 
-                  className="absolute top-1 right-1 z-20 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 bg-white/80 p-1 rounded backdrop-blur-sm"
-                  title="Arrastrar para mover"
-                >
+                <div className="absolute top-1 right-1 z-20 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 bg-white/80 p-1 rounded backdrop-blur-sm">
                   <GripVertical size={14} />
                 </div>
                 {renderTopWidget(widgetKey)}
@@ -851,25 +735,37 @@ export default function DashboardView({
         ))}
       </div>
 
-      {/* Gráficos y Widgets Inferiores con Drag & Drop */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pb-10">
+      {/* Gráficos y Widgets Inferiores - Draggable */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {widgetOrder.map((widgetKey, index) => (
           <div
             key={widgetKey}
             draggable
-            onDragStart={(e) => handleDragStart(e, widgetKey)}
-            onDragOver={(e) => handleDragOver(e, index)}
-            onDrop={handleDrop}
-            className={`transition-all duration-200 ${
-              draggedItem === widgetKey ? 'opacity-40 scale-95 border-2 border-dashed border-slate-300 rounded-xl' : 'opacity-100'
+            onDragStart={(e) => {
+                setDraggedItem(widgetKey);
+                e.dataTransfer.effectAllowed = 'move';
+            }}
+            onDragOver={(e) => {
+                e.preventDefault();
+                if (draggedItem === widgetKey) return;
+                 const currentIdx = widgetOrder.indexOf(draggedItem);
+                 if (currentIdx !== -1 && currentIdx !== index) {
+                     const newOrder = [...widgetOrder];
+                     newOrder.splice(currentIdx, 1);
+                     newOrder.splice(index, 0, draggedItem);
+                     setWidgetOrder(newOrder);
+                 }
+            }}
+            onDrop={(e) => {
+                e.preventDefault();
+                setDraggedItem(null);
+            }}
+            className={`transition-all duration-200 h-full ${
+              draggedItem === widgetKey ? 'opacity-40 scale-95 border-dashed border-2 border-slate-300 rounded-xl' : ''
             }`}
           >
             <div className="group relative h-full">
-              {/* Drag Handle Bottom */}
-              <div 
-                className="absolute top-4 right-4 z-20 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 bg-white/80 p-1 rounded backdrop-blur-sm"
-                title="Arrastrar para mover"
-              >
+              <div className="absolute top-4 right-4 z-20 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 bg-white/80 p-1 rounded backdrop-blur-sm">
                 <GripVertical size={16} />
               </div>
               {renderWidget(widgetKey)}
