@@ -217,137 +217,157 @@ export default function InventoryView({
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {filteredInventory.map((item) => (
-                  <tr key={item.id} className="hover:bg-slate-50 group">
-                    <td className="px-2 py-2">
-                      <ProductImage
-                        item={item}
-                        className="w-8 h-8 rounded bg-slate-100 object-cover border"
-                        onClick={() => {
-                          setSelectedImage(item.image);
-                          setIsImageModalOpen(true);
-                        }}
-                      />
-                    </td>
-                    <td className="px-2 py-2 font-medium text-slate-900">
-                      {item.title}
-                    </td>
-                    <td className="px-2 py-2 text-slate-500">
-                      {Array.isArray(item.categories) &&
-                      item.categories.length > 0
-                        ? item.categories.join(', ')
-                        : item.category}
-                    </td>
-                    {currentUser.role === 'admin' && (
-                      <td className="px-2 py-2 text-slate-400">
-                        ${item.purchasePrice?.toLocaleString()}
+                {filteredInventory.map((item) => {
+                  const isOutOfStock = item.stock === 0;
+                  const isLowStock = item.stock > 0 && item.stock < 10;
+                  
+                  return (
+                    <tr key={item.id} className="hover:bg-slate-50 group">
+                      <td className="px-2 py-2">
+                        <ProductImage
+                          item={item}
+                          className="w-8 h-8 rounded bg-slate-100 object-cover border"
+                          onClick={() => {
+                            setSelectedImage(item.image);
+                            setIsImageModalOpen(true);
+                          }}
+                        />
                       </td>
-                    )}
-                    <td className="px-2 py-2 font-bold">
-                      ${item.price.toLocaleString()}
-                    </td>
-                    <td className="px-2 py-2">
-                      <span
-                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                          item.stock < 10
-                            ? 'bg-red-100 text-red-700'
-                            : 'bg-green-50 text-green-700'
-                        }`}
-                      >
-                        {item.stock}
-                      </span>
-                    </td>
-                    {currentUser.role === 'admin' && (
-                      <td className="px-2 py-2 text-center opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => setEditingProduct({ ...item })}
-                          className="text-blue-500 hover:bg-blue-50 p-1 rounded mr-1"
-                          title="Editar"
-                        >
-                          <Edit2 size={14} />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteProduct(item.id)}
-                          className="text-red-500 hover:bg-red-50 p-1 rounded"
-                          title="Eliminar"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                      <td className="px-2 py-2 font-medium text-slate-900">
+                        {item.title}
                       </td>
-                    )}
-                  </tr>
-                ))}
+                      <td className="px-2 py-2 text-slate-500">
+                        {Array.isArray(item.categories) &&
+                        item.categories.length > 0
+                          ? item.categories.join(', ')
+                          : item.category}
+                      </td>
+                      {currentUser.role === 'admin' && (
+                        <td className="px-2 py-2 text-slate-400">
+                          ${item.purchasePrice?.toLocaleString()}
+                        </td>
+                      )}
+                      <td className="px-2 py-2 font-bold">
+                        ${item.price.toLocaleString()}
+                      </td>
+                      <td className="px-2 py-2">
+                        <span
+                          className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                            isOutOfStock
+                              ? 'bg-red-200 text-red-800'
+                              : isLowStock
+                              ? 'bg-amber-100 text-amber-800'
+                              : 'bg-green-50 text-green-700'
+                          }`}
+                        >
+                          {isOutOfStock ? 'AGOTADO' : item.stock}
+                        </span>
+                      </td>
+                      {currentUser.role === 'admin' && (
+                        <td className="px-2 py-2 text-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => setEditingProduct({ ...item })}
+                            className="text-blue-500 hover:bg-blue-50 p-1 rounded mr-1"
+                            title="Editar"
+                          >
+                            <Edit2 size={14} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteProduct(item.id)}
+                            className="text-red-500 hover:bg-red-50 p-1 rounded"
+                            title="Eliminar"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         ) : (
           <div className={`grid ${getGridClasses()}`}>
-            {filteredInventory.map((item) => (
-              <div
-                key={item.id}
-                className="bg-white rounded border overflow-hidden shadow-sm hover:shadow transition flex flex-col group"
-              >
-                <div className="relative aspect-square">
-                  <ProductImage
-                    item={item}
-                    className="w-full h-full object-contain bg-white"
-                    onClick={() => {
-                      setSelectedImage(item.image);
-                      setIsImageModalOpen(true);
-                    }}
-                  />
-                  {item.stock < 10 && (
-                    <div className="absolute top-1 right-1 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded font-bold shadow-sm">
-                      BAJO
-                    </div>
-                  )}
-                </div>
-                <div className="p-2 flex-1 flex flex-col border-t">
-                  <span className="text-[9px] text-fuchsia-600 font-bold uppercase mb-0.5 truncate block">
-                    {Array.isArray(item.categories) &&
-                    item.categories.length > 0
-                      ? item.categories.join(', ')
-                      : item.category}
-                  </span>
-                  <h4
-                    className={`font-bold text-slate-800 leading-tight flex-1 line-clamp-2 mb-1 ${
-                      gridSize === 'small' ? 'text-[10px]' : 'text-xs'
-                    }`}
-                  >
-                    {item.title}
-                  </h4>
-                  <div className="flex justify-between items-end mt-auto">
-                    <span
-                      className={`font-bold text-slate-900 ${
-                        gridSize === 'small' ? 'text-xs' : 'text-sm'
+            {filteredInventory.map((item) => {
+              const isOutOfStock = item.stock === 0;
+              const isLowStock = item.stock > 0 && item.stock < 10;
+              
+              return (
+                <div
+                  key={item.id}
+                  className="bg-white rounded border overflow-hidden shadow-sm hover:shadow transition flex flex-col group"
+                >
+                  <div className="relative aspect-square">
+                    <ProductImage
+                      item={item}
+                      className="w-full h-full object-contain bg-white"
+                      onClick={() => {
+                        setSelectedImage(item.image);
+                        setIsImageModalOpen(true);
+                      }}
+                    />
+                    {(isLowStock || isOutOfStock) && (
+                      <div className={`absolute top-1 right-1 text-white text-[9px] px-1.5 py-0.5 rounded font-bold shadow-sm ${
+                        isOutOfStock ? 'bg-red-600' : 'bg-amber-500'
+                      }`}>
+                        {isOutOfStock ? 'AGOTADO' : 'BAJO'}
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-2 flex-1 flex flex-col border-t">
+                    <span className="text-[9px] text-fuchsia-600 font-bold uppercase mb-0.5 truncate block">
+                      {Array.isArray(item.categories) &&
+                      item.categories.length > 0
+                        ? item.categories.join(', ')
+                        : item.category}
+                    </span>
+                    <h4
+                      className={`font-bold text-slate-800 leading-tight flex-1 line-clamp-2 mb-1 ${
+                        gridSize === 'small' ? 'text-[10px]' : 'text-xs'
                       }`}
                     >
-                      ${item.price.toLocaleString()}
-                    </span>
-                    <span className="text-[10px] text-slate-500">
-                      {item.stock}u
-                    </span>
-                  </div>
-
-                  {currentUser.role === 'admin' && (
-                    <div className="flex gap-1 mt-2 pt-2 border-t border-dashed opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                      <button
-                        onClick={() => setEditingProduct({ ...item })}
-                        className="flex-1 text-[10px] bg-blue-50 text-blue-600 py-1 rounded hover:bg-blue-100 flex items-center justify-center gap-1"
+                      {item.title}
+                    </h4>
+                    <div className="flex justify-between items-end mt-auto">
+                      <span
+                        className={`font-bold text-slate-900 ${
+                          gridSize === 'small' ? 'text-xs' : 'text-sm'
+                        }`}
                       >
-                        <Edit2 size={12} />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteProduct(item.id)}
-                        className="flex-1 text-[10px] bg-red-50 text-red-600 py-1 rounded hover:bg-red-100 flex items-center justify-center gap-1"
-                      >
-                        <Trash2 size={12} />
-                      </button>
+                        ${item.price.toLocaleString()}
+                      </span>
+                      <span className={`text-[10px] ${
+                        isOutOfStock 
+                          ? 'text-red-600 font-bold' 
+                          : isLowStock 
+                          ? 'text-amber-600 font-bold' 
+                          : 'text-slate-500'
+                      }`}>
+                        {isOutOfStock ? 'Sin Stock' : `${item.stock}u`}
+                      </span>
                     </div>
-                  )}
+
+                    {currentUser.role === 'admin' && (
+                      <div className="flex gap-1 mt-2 pt-2 border-t border-dashed opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => setEditingProduct({ ...item })}
+                          className="flex-1 text-[10px] bg-blue-50 text-blue-600 py-1 rounded hover:bg-blue-100 flex items-center justify-center gap-1"
+                        >
+                          <Edit2 size={12} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteProduct(item.id)}
+                          className="flex-1 text-[10px] bg-red-50 text-red-600 py-1 rounded hover:bg-red-100 flex items-center justify-center gap-1"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

@@ -25,6 +25,7 @@ import {
   AlertTriangle,
   FilterX,
   Wand2,
+  CheckCircle, // Agregamos icono para la lista de cambios
 } from 'lucide-react';
 
 export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
@@ -148,6 +149,14 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
     ) {
       if (action === 'Baja Producto') return 'Baja Producto';
       return 'Alta de Producto';
+    }
+
+    // 9. EDICIÓN MASIVA CATEGORÍAS (NUEVO)
+    if (
+      action === 'Edición Masiva Categorías' ||
+      (details.count !== undefined && Array.isArray(details.details))
+    ) {
+      return 'Edición Masiva Categorías';
     }
 
     return action;
@@ -642,6 +651,20 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
             </span>
             <span className="text-slate-500 text-[10px]">
               {typeof details === 'string' ? details : 'Transacción eliminada'}
+            </span>
+          </div>
+        );
+      }
+
+      // NUEVO: Resumen para Edición Masiva
+      case 'Edición Masiva Categorías': {
+        return (
+          <div className="flex items-center gap-2 flex-wrap">
+             <span className="bg-fuchsia-100 text-fuchsia-700 px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1">
+              <Tag size={10} /> Edición Masiva
+            </span>
+            <span className="text-slate-600 text-[10px] font-medium">
+              {details.count} productos actualizados
             </span>
           </div>
         );
@@ -1406,6 +1429,48 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
         );
       }
 
+      // NUEVO: Detalle para Edición Masiva
+      case 'Edición Masiva Categorías': {
+        const changeList = details.details || [];
+        
+        return (
+          <div className="space-y-3">
+            <div className="bg-fuchsia-50 p-4 rounded-lg border border-fuchsia-200 flex items-center gap-3">
+              <div className="w-12 h-12 bg-fuchsia-600 rounded-full flex items-center justify-center">
+                <Tag size={24} className="text-white" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-fuchsia-600 uppercase">
+                  Actualización en Lote
+                </p>
+                <p className="text-lg font-bold text-slate-800">
+                  {details.count} cambios aplicados
+                </p>
+              </div>
+            </div>
+
+            <div className="border rounded-lg overflow-hidden">
+               <div className="bg-slate-100 px-3 py-2 border-b">
+                 <p className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1">
+                   <List size={14}/> Detalle de operaciones
+                 </p>
+               </div>
+               <ul className="divide-y bg-white max-h-60 overflow-y-auto">
+                 {changeList.map((item, idx) => {
+                   const isAdd = item.includes('Agregado');
+                   return (
+                     <li key={idx} className="px-3 py-2 text-xs flex items-center gap-2">
+                        <CheckCircle size={14} className={isAdd ? "text-green-500" : "text-red-500"} />
+                        <span className="text-slate-700">{item}</span>
+                     </li>
+                   )
+                 })}
+               </ul>
+            </div>
+          </div>
+        );
+      }
+
       default: {
         // Intentar detectar por estructura antes de mostrar JSON
         if (details.items && details.total && details.payment) {
@@ -1517,6 +1582,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
       'Horario Modificado': 'Cambio de Horario',
       'Sistema Iniciado': 'Información del Sistema',
       'Borrado Permanente': 'Registro Eliminado',
+      'Edición Masiva Categorías': 'Reporte de Cambios Masivos', // NUEVO TÍTULO
     };
     return titles[action] || 'Detalles';
   };

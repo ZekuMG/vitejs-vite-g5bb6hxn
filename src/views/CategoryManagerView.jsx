@@ -10,8 +10,10 @@ import {
   Save,
   Search,
   Check,
+  CheckCircle, // Importado para el reporte
   PlusCircle,
   MinusCircle,
+  List, // Importado para el reporte
 } from 'lucide-react';
 
 export default function CategoryManagerView({
@@ -33,6 +35,9 @@ export default function CategoryManagerView({
   // Estado local para cambios pendientes antes de guardar
   // Array de objetos: { productId, categoryName, action: 'add' | 'remove' }
   const [pendingChanges, setPendingChanges] = useState([]);
+
+  // Estado para el Modal de Reporte de Resultados
+  const [batchReport, setBatchReport] = useState(null);
 
   // Limpiar pendientes al cerrar modal
   const handleCloseModal = () => {
@@ -120,15 +125,33 @@ export default function CategoryManagerView({
   };
 
   const handleSaveEdit = () => {
+    // Preparar datos para el reporte ANTES de ejecutar y limpiar
+    let reportData = null;
+    if (pendingChanges.length > 0) {
+      const addedItems = [];
+      const removedItems = [];
+
+      pendingChanges.forEach((change) => {
+        const prod = inventory.find((p) => p.id === change.productId);
+        if (prod) {
+          if (change.action === 'add') addedItems.push(prod.title);
+          else if (change.action === 'remove') removedItems.push(prod.title);
+        }
+      });
+
+      reportData = {
+        categoryName: editedName || selectedCategory,
+        added: addedItems,
+        removed: removedItems,
+        count: pendingChanges.length,
+      };
+    }
+
     // 1. Guardar cambios de productos
     if (pendingChanges.length > 0 && onBatchUpdateProductCategory) {
-      // Si cambió el nombre, debemos usar el nombre VIEJO para los cambios de productos
-      // porque el ID de la categoría en el inventario es el nombre viejo.
-      // El rename de categoría se encarga de actualizar los strings en los productos después.
-      // Sin embargo, para consistencia, aplicamos los cambios a la categoría actual (selectedCategory)
       const sanitizedChanges = pendingChanges.map((c) => ({
         ...c,
-        categoryName: selectedCategory, // Aseguramos que apunte a la ID correcta antes del rename
+        categoryName: selectedCategory, 
       }));
       onBatchUpdateProductCategory(sanitizedChanges);
     }
@@ -136,6 +159,13 @@ export default function CategoryManagerView({
     // 2. Guardar cambio de nombre
     if (editedName.trim() && editedName !== selectedCategory) {
       onEditCategory(selectedCategory, editedName.trim());
+      // Actualizar nombre en reporte si hubo cambio
+      if (reportData) reportData.categoryName = editedName.trim();
+    }
+
+    // Mostrar reporte si hubo cambios masivos
+    if (reportData) {
+      setBatchReport(reportData);
     }
 
     handleCloseModal();
@@ -520,6 +550,73 @@ export default function CategoryManagerView({
               >
                 <Save size={16} />
                 Guardar Cambios
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Reporte de Resultados (NUEVO) */}
+      {batchReport && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="bg-green-600 p-4 flex items-center gap-3 text-white">
+              <CheckCircle size={28} />
+              <div>
+                <h3 className="font-bold text-lg">Cambios Aplicados</h3>
+                <p className="text-green-100 text-xs">
+                  Resumen de la actualización masiva
+                </p>
+              </div>
+            </div>
+
+            <div className="p-5 max-h-[60vh] overflow-y-auto">
+              <div className="mb-4">
+                <p className="text-xs text-slate-400 uppercase font-bold mb-1">
+                  Categoría Afectada
+                </p>
+                <p className="text-lg font-bold text-slate-800 bg-slate-100 p-2 rounded-lg border">
+                  {batchReport.categoryName}
+                </p>
+              </div>
+
+              {batchReport.added.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-xs font-bold text-green-600 uppercase mb-2 flex items-center gap-1">
+                    <PlusCircle size={14} /> Agregados ({batchReport.added.length})
+                  </p>
+                  <ul className="text-xs space-y-1 bg-green-50 p-3 rounded-lg border border-green-100">
+                    {batchReport.added.map((name, i) => (
+                      <li key={i} className="flex items-start gap-2 text-slate-700">
+                        <span className="text-green-500">•</span> {name}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {batchReport.removed.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-xs font-bold text-red-600 uppercase mb-2 flex items-center gap-1">
+                    <MinusCircle size={14} /> Quitados ({batchReport.removed.length})
+                  </p>
+                  <ul className="text-xs space-y-1 bg-red-50 p-3 rounde0d-lg border border-red-100">
+                    {batchReport.removed.map((name, i) => (
+                      <li key={i} className="flex items-start gap-2 text-slate-700">
+                        <span className="text-red-500">•</span> {name}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t bg-slate-50">
+              <button
+                onClick={() => setBatchReport(null)}
+                className="w-full bg-slate-800 text-white py-2 rounded-lg font-bold hover:bg-slate-900 transition"
+              >
+                Cerrar
               </button>
             </div>
           </div>
