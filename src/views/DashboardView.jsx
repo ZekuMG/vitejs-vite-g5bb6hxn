@@ -441,7 +441,7 @@ export default function DashboardView({
 
   const renderTopWidget = (key) => {
     const getPeriodText = (prefix) => {
-        if (globalFilter === 'day') return `${prefix} Diario`;
+        if (globalFilter === 'day') return `${prefix} del Dia`;
         if (globalFilter === 'week') return `${prefix} Semanal`;
         return `${prefix} Mensual`;
     };
@@ -451,7 +451,7 @@ export default function DashboardView({
         return (
           <div className="bg-white p-4 rounded-xl shadow-sm border border-blue-100 relative overflow-hidden flex flex-col justify-between h-32">
             <div className="flex justify-between items-start z-10">
-              <span className="text-[10px] font-bold text-blue-400 uppercase">{getPeriodText('Ventas')}</span>
+              <span className="text-[15px] font-bold text-blue-400 uppercase">{getPeriodText('Ventas')}</span>
               <Package size={14} className="text-blue-500" />
             </div>
             <span className="text-2xl font-bold text-blue-600 z-10">{kpiStats.count}</span>
@@ -462,7 +462,7 @@ export default function DashboardView({
         return (
           <div className="bg-white p-4 rounded-xl shadow-sm border border-fuchsia-100 relative overflow-hidden flex flex-col justify-between h-32">
             <div className="flex justify-between items-start z-10">
-              <span className="text-[10px] font-bold text-fuchsia-400 uppercase">{getPeriodText('Ingreso')}</span>
+              <span className="text-[15px] font-bold text-fuchsia-400 uppercase">{getPeriodText('Ingreso')}</span>
               <TrendingUp size={14} className="text-fuchsia-500" />
             </div>
             <span className="text-2xl font-bold text-fuchsia-600 z-10">${kpiStats.gross.toLocaleString()}</span>
@@ -473,7 +473,7 @@ export default function DashboardView({
         return (
           <div className="bg-white p-4 rounded-xl shadow-sm border border-emerald-100 relative overflow-hidden flex flex-col justify-between h-32">
             <div className="flex justify-between items-start z-10">
-              <span className="text-[10px] font-bold text-emerald-500 uppercase">Ganancia Neta</span>
+              <span className="text-[15px] font-bold text-emerald-500 uppercase">Ganancia Neta</span>
               <DollarSign size={14} className="text-emerald-500" />
             </div>
             <span className="text-2xl font-bold text-emerald-600 z-10">${kpiStats.net.toLocaleString()}</span>
@@ -484,7 +484,7 @@ export default function DashboardView({
         return (
           <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 relative overflow-hidden flex flex-col justify-between h-32">
             <div className="flex justify-between items-start mb-1 z-10">
-              <span className="text-[10px] font-bold text-slate-400 uppercase">Caja Inicial</span>
+              <span className="text-[15px] font-bold text-slate-400 uppercase">Caja Inicial</span>
               {currentUser.role === 'admin' && (
                 <button
                   onClick={() => {
@@ -505,7 +505,7 @@ export default function DashboardView({
         return (
           <div className="bg-white p-4 rounded-xl shadow-sm border border-indigo-100 relative overflow-hidden flex flex-col justify-between h-32">
             <div className="flex justify-between items-start z-10">
-              <span className="text-[10px] font-bold text-indigo-400 uppercase">Ticket Promedio</span>
+              <span className="text-[15px] font-bold text-indigo-400 uppercase">Ticket Promedio</span>
               <Percent size={14} className="text-indigo-500" />
             </div>
             <span className="text-2xl font-bold text-indigo-600 z-10">${Math.round(averageTicket).toLocaleString()}</span>

@@ -1,25 +1,25 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import {
   Search,
   Plus,
   Filter,
-  Edit3,
-  Trash2,
   Package,
-  Grid3x3,
-  LayoutGrid,
-  Maximize,
-  Image as ImageIcon,
-  MoreVertical
+  X,
+  DollarSign,
+  BarChart3,
+  ScanBarcode,
+  Edit,
+  Trash2,
+  ImageIcon,
+  AlertTriangle,
+  SlidersHorizontal, // Icono para el control de tamaño
+  LayoutGrid,        // Icono Cuadrícula
+  List               // Icono Lista
 } from 'lucide-react';
-import ProductImage from '../components/ProductImage';
 
 export default function InventoryView({
   inventory,
   categories,
-  currentUser,
-  inventoryViewMode, // 'grid' | 'list'
-  setInventoryViewMode,
   inventorySearch,
   setInventorySearch,
   inventoryCategoryFilter,
@@ -27,360 +27,443 @@ export default function InventoryView({
   setIsModalOpen,
   setEditingProduct,
   handleDeleteProduct,
-  setSelectedImage,
-  setIsImageModalOpen,
+  inventoryViewMode,     
+  setInventoryViewMode
 }) {
-  const [gridSize, setGridSize] = useState('normal'); // 'small' | 'normal' | 'large'
+  // --- ESTADOS LOCALES ---
+  const [selectedProduct, setSelectedProduct] = useState(null); 
+  
+  // Estado para las columnas (Slider), inicia en 5
+  const [gridColumns, setGridColumns] = useState(5); 
+  const [showGridMenu, setShowGridMenu] = useState(false);
 
-  // Filtrado
-  const filteredInventory = useMemo(() => {
-    return (inventory || []).filter((item) => {
-      const matchesSearch =
-        item.title.toLowerCase().includes(inventorySearch.toLowerCase()) ||
-        (item.brand &&
-          item.brand.toLowerCase().includes(inventorySearch.toLowerCase()));
+  // --- FILTROS ---
+  const filteredInventory = inventory.filter((item) => {
+    const matchesSearch = item.title.toLowerCase().includes(inventorySearch.toLowerCase());
+    const matchesCategory =
+      inventoryCategoryFilter === 'Todas' ||
+      (Array.isArray(item.categories)
+        ? item.categories.includes(inventoryCategoryFilter)
+        : item.category === inventoryCategoryFilter);
+    return matchesSearch && matchesCategory;
+  });
 
-      const itemCategories = Array.isArray(item.categories) && item.categories.length > 0
-        ? item.categories
-        : item.category
-        ? [item.category]
-        : [];
-
-      const matchesCategory =
-        inventoryCategoryFilter === 'Todas' ||
-        itemCategories.includes(inventoryCategoryFilter);
-
-      return matchesSearch && matchesCategory;
-    });
-  }, [inventory, inventorySearch, inventoryCategoryFilter]);
-
-  // Lógica de Stock Visual (Badge)
-  const renderStockBadge = (stock) => {
-    if (stock === 0) {
-      return (
-        <span className="bg-slate-800 text-white text-[9px] px-1.5 py-0.5 rounded font-bold shadow-sm">
-          AGOTADO
-        </span>
-      );
+  // Manejador de selección para el panel lateral
+  const handleCardClick = (product) => {
+    if (selectedProduct && selectedProduct.id === product.id) {
+        setSelectedProduct(null);
+    } else {
+        setSelectedProduct(product);
     }
-    if (stock < 5) {
-      return (
-        <span className="bg-red-100 text-red-700 text-[9px] px-1.5 py-0.5 rounded font-bold border border-red-200">
-          {stock}
-        </span>
-      );
-    }
-    if (stock < 10) {
-      return (
-        <span className="bg-amber-100 text-amber-700 text-[9px] px-1.5 py-0.5 rounded font-bold border border-amber-200">
-          {stock}
-        </span>
-      );
-    }
-    return (
-      <span className="bg-green-100 text-green-700 text-[9px] px-1.5 py-0.5 rounded font-bold border border-green-200">
-        {stock}
-      </span>
-    );
   };
 
-  // Clases de Grilla Dinámica
-  const getGridClasses = () => {
-    switch (gridSize) {
-      case 'small':
-        return 'grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-7 gap-2';
-      case 'normal':
-        return 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3';
-      case 'large':
-        return 'grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3';
-      default:
-        return 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3';
-    }
+  // --- AYUDANTE DE COLOR DE STOCK (SEMÁFORO) ---
+  const getStockColorClass = (stock) => {
+    if (stock === 0) return 'text-slate-400'; // Gris (Sin stock)
+    if (stock <= 5) return 'text-red-600';    // Rojo (Crítico)
+    if (stock <= 10) return 'text-amber-600'; // Amarillo (Alerta)
+    return 'text-green-600';                  // Verde (Bien)
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-100">
-      {/* --- HEADER DE CONTROLES (COMPACTO) --- */}
-      <div className="bg-white p-2 rounded-xl shadow-sm border border-slate-200 mb-2 flex flex-col sm:flex-row gap-2 items-center justify-between shrink-0">
-        <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto no-scrollbar">
-          {/* Botón Agregar Compacto */}
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="bg-slate-900 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-slate-800 transition-colors flex items-center gap-1.5 shadow-sm whitespace-nowrap"
-          >
-            <Plus size={14} /> <span className="hidden sm:inline">Nuevo</span>
-            <span className="sm:hidden">+</span>
-          </button>
-
-          <div className="h-5 w-px bg-slate-200 mx-1"></div>
-
-          {/* Buscador Compacto */}
-          <div className="relative flex-1 sm:w-56">
-            <Search
-              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
-              size={14}
-            />
-            <input
-              type="text"
-              placeholder="Buscar..."
-              className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-500 transition-all"
-              value={inventorySearch}
-              onChange={(e) => setInventorySearch(e.target.value)}
-            />
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-          {/* Filtro Categoría Compacto */}
-          <div className="relative max-w-[140px] w-full">
-            <Filter
-              className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-              size={12}
-            />
-            <select
-              className="w-full pl-7 pr-6 py-1.5 text-[11px] bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-500 cursor-pointer appearance-none font-medium text-slate-600 shadow-sm hover:bg-slate-50 truncate"
-              value={inventoryCategoryFilter}
-              onChange={(e) => setInventoryCategoryFilter(e.target.value)}
-            >
-              <option value="Todas">Todas</option>
-              {(categories || []).map((cat) => (
-                <option key={cat} value={cat}>
-                  {cat}
-                </option>
-              ))}
-            </select>
+    <div className="flex h-full overflow-hidden bg-slate-100">
+      
+      {/* ================================================= */}
+      {/* COLUMNA IZQUIERDA: LISTA O CUADRÍCULA             */}
+      {/* ================================================= */}
+      <div className="flex-1 flex flex-col min-w-0 transition-all duration-300">
+        
+        {/* Header de Filtros y Controles */}
+        <div className="p-4 bg-white border-b shrink-0 flex flex-wrap gap-3 justify-between items-center z-30 relative">
+          
+          {/* Parte Izquierda: Buscador y Categoría */}
+          <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+              <input
+                type="text"
+                placeholder="Buscar producto..."
+                className="w-full pl-10 pr-4 py-2 border rounded-lg bg-slate-50 focus:bg-white focus:ring-2 focus:ring-fuchsia-500 outline-none transition-all"
+                value={inventorySearch}
+                onChange={(e) => setInventorySearch(e.target.value)}
+              />
+            </div>
+            
+            <div className="relative">
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+              <select
+                className="pl-9 pr-8 py-2 border rounded-lg bg-slate-50 text-sm focus:ring-2 focus:ring-fuchsia-500 outline-none appearance-none cursor-pointer"
+                value={inventoryCategoryFilter}
+                onChange={(e) => setInventoryCategoryFilter(e.target.value)}
+              >
+                <option value="Todas">Todas</option>
+                {categories.map((cat) => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
-          {/* Controles de Vista Compactos */}
-          <div className="flex items-center gap-2 shrink-0">
-             {/* Switch Grid/List */}
-            <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+          {/* Parte Derecha: Controles */}
+          <div className="flex items-center gap-3">
+            
+            {/* 1. CONTROL DESLIZANTE (Ubicado a la IZQUIERDA de los botones de vista) */}
+            {inventoryViewMode === 'grid' && (
+              <div className="relative">
                 <button
+                  onClick={() => setShowGridMenu(!showGridMenu)}
+                  className={`p-2 rounded-lg border transition-all ${
+                    showGridMenu ? 'bg-slate-100 ring-2 ring-slate-200' : 'bg-white hover:bg-slate-50'
+                  }`}
+                  title="Ajustar densidad"
+                >
+                  <SlidersHorizontal size={20} className="text-slate-600" />
+                </button>
+
+                {/* Popover del Slider */}
+                {showGridMenu && (
+                  <>
+                    {/* Overlay invisible para cerrar al hacer click fuera */}
+                    <div className="fixed inset-0 z-40" onClick={() => setShowGridMenu(false)}></div>
+                    
+                    <div className="absolute top-full right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-slate-200 p-4 z-50 animate-in fade-in zoom-in-95">
+                      <div className="flex justify-between items-center mb-3">
+                        <span className="text-xs font-bold text-slate-500 uppercase">Densidad</span>
+                        <span className="text-xs font-bold text-fuchsia-600 bg-fuchsia-50 px-2 py-0.5 rounded-full border border-fuchsia-100">
+                          {gridColumns} columnas
+                        </span>
+                      </div>
+                      
+                      {/* El Input Slider */}
+                      <div className="relative h-6 flex items-center">
+                          <input
+                              type="range"
+                              min="4"
+                              max="10"
+                              step="1"
+                              value={gridColumns}
+                              onChange={(e) => setGridColumns(Number(e.target.value))}
+                              className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-fuchsia-600 hover:accent-fuchsia-500 z-10 relative"
+                          />
+                      </div>
+                      
+                      <div className="flex justify-between text-[10px] text-slate-400 mt-1 font-mono">
+                        <span>Grande (4x)</span>
+                        <span>Pequeño (10x)</span>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* 2. SWITCH DE VISTA (LISTA vs CUADRÍCULA) */}
+            <div className="flex bg-slate-100 p-1 rounded-lg border">
+              <button
                 onClick={() => setInventoryViewMode('grid')}
-                className={`p-1 rounded-md transition-all ${
-                    inventoryViewMode === 'grid'
-                    ? 'bg-white shadow-sm text-fuchsia-600'
+                className={`p-1.5 rounded-md transition-all ${
+                  inventoryViewMode === 'grid'
+                    ? 'bg-white text-fuchsia-600 shadow-sm'
                     : 'text-slate-400 hover:text-slate-600'
                 }`}
-                title="Grilla"
-                >
-                <LayoutGrid size={14} />
-                </button>
-                <button
+                title="Vista Cuadrícula"
+              >
+                <LayoutGrid size={18} />
+              </button>
+              <button
                 onClick={() => setInventoryViewMode('list')}
-                className={`p-1 rounded-md transition-all ${
-                    inventoryViewMode === 'list'
-                    ? 'bg-white shadow-sm text-fuchsia-600'
+                className={`p-1.5 rounded-md transition-all ${
+                  inventoryViewMode === 'list'
+                    ? 'bg-white text-fuchsia-600 shadow-sm'
                     : 'text-slate-400 hover:text-slate-600'
                 }`}
-                title="Lista"
-                >
-                <MoreVertical size={14} className="rotate-90" />
-                </button>
+                title="Vista Lista"
+              >
+                <List size={18} />
+              </button>
             </div>
 
-            {/* Tamaño de Grilla */}
-            {inventoryViewMode === 'grid' && (
-                <div className="hidden md:flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
-                <button
-                    onClick={() => setGridSize('small')}
-                    className={`p-1 rounded-md transition-all ${
-                    gridSize === 'small'
-                        ? 'bg-white shadow-sm text-fuchsia-600'
-                        : 'text-slate-400 hover:text-slate-600'
-                    }`}
-                    title="Chico"
-                >
-                    <Grid3x3 size={14} />
-                </button>
-                <button
-                    onClick={() => setGridSize('normal')}
-                    className={`p-1 rounded-md transition-all ${
-                    gridSize === 'normal'
-                        ? 'bg-white shadow-sm text-fuchsia-600'
-                        : 'text-slate-400 hover:text-slate-600'
-                    }`}
-                    title="Normal"
-                >
-                    <LayoutGrid size={14} />
-                </button>
-                <button
-                    onClick={() => setGridSize('large')}
-                    className={`p-1 rounded-md transition-all ${
-                    gridSize === 'large'
-                        ? 'bg-white shadow-sm text-fuchsia-600'
-                        : 'text-slate-400 hover:text-slate-600'
-                    }`}
-                    title="Grande"
-                >
-                    <Maximize size={14} />
-                </button>
-                </div>
-            )}
+            {/* 3. BOTÓN NUEVO PRODUCTO */}
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-colors shadow-lg shadow-slate-900/20"
+            >
+              <Plus size={18} /> <span className="hidden sm:inline">Nuevo</span>
+            </button>
           </div>
+        </div>
+
+        {/* Área de Scroll de Productos */}
+        <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+          {filteredInventory.length === 0 ? (
+            <div className="h-full flex flex-col items-center justify-center text-slate-400">
+              <Package size={64} className="mb-4 text-slate-300" />
+              <p className="text-lg font-medium">No se encontraron productos</p>
+              <p className="text-sm">Intenta con otra búsqueda o categoría</p>
+            </div>
+          ) : (
+            <>
+              {/* --- VISTA CUADRÍCULA (GRID) --- */}
+              {inventoryViewMode === 'grid' ? (
+                <div
+                  className="grid gap-3 transition-all duration-300"
+                  style={{
+                    gridTemplateColumns: `repeat(${gridColumns}, minmax(0, 1fr))`
+                  }}
+                >
+                  {filteredInventory.map((product) => {
+                    const isSelected = selectedProduct?.id === product.id;
+                    const stockColor = getStockColorClass(product.stock);
+                    const isOutOfStock = product.stock === 0;
+
+                    return (
+                      <div
+                        key={product.id}
+                        onClick={() => handleCardClick(product)}
+                        className={`bg-white rounded-xl border overflow-hidden flex flex-col cursor-pointer transition-all hover:shadow-lg group ${
+                          isSelected ? 'ring-2 ring-fuchsia-500 border-fuchsia-500 transform scale-[0.98]' : 'hover:border-fuchsia-200'
+                        } ${isOutOfStock ? 'grayscale opacity-75' : ''}`}
+                      >
+                        <div className="aspect-square bg-slate-50 relative overflow-hidden">
+                          {product.image ? (
+                            <img
+                              src={product.image}
+                              alt={product.title}
+                              className="w-full h-full object-cover transition-transform group-hover:scale-110 duration-500"
+                            />
+                          ) : (
+                            // NOMBRE EN VEZ DE ICONO (Fallback)
+                            <div className="w-full h-full flex flex-col items-center justify-center bg-slate-200/50 p-2 text-center group-hover:bg-slate-200 transition-colors">
+                              <span className={`font-bold text-slate-500 uppercase leading-tight ${gridColumns > 6 ? 'text-[10px]' : 'text-xs'}`}>
+                                {product.title}
+                              </span>
+                            </div>
+                          )}
+                          
+                          {/* OVERLAY SIN STOCK */}
+                          {isOutOfStock && (
+                            <div className="absolute inset-0 bg-white/60 backdrop-blur-[1px] flex items-center justify-center z-10">
+                                <span className="bg-slate-800 text-white text-[10px] font-bold px-2 py-1 rounded shadow-sm border border-slate-600">SIN STOCK</span>
+                            </div>
+                          )}
+
+                          {/* Badge de Stock Bajo (Si no es 0) */}
+                          {!isOutOfStock && product.stock <= 5 && (
+                            <div className={`absolute top-1 right-1 bg-red-500 text-white font-bold rounded-full shadow-sm flex items-center justify-center ${gridColumns > 6 ? 'w-3 h-3 p-0' : 'px-2 py-0.5 text-[10px] gap-1'}`}>
+                              {gridColumns > 6 ? '' : <AlertTriangle size={10} />}
+                              {gridColumns > 6 ? '' : 'BAJO'}
+                            </div>
+                          )}
+                        </div>
+                        
+                        <div className={`flex-1 flex flex-col ${gridColumns > 7 ? 'p-1.5' : 'p-3'}`}>
+                          {gridColumns <= 7 && (
+                            <div className="mb-1">
+                              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider truncate block">
+                                {Array.isArray(product.categories) ? product.categories[0] : product.category || 'Gral'}
+                              </span>
+                            </div>
+                          )}
+                          
+                          <h3 className={`font-bold text-slate-800 leading-tight mb-1 flex-1 ${gridColumns > 7 ? 'text-[10px] line-clamp-1' : 'text-sm line-clamp-2'}`}>
+                            {product.title}
+                          </h3>
+                          
+                          <div className={`flex justify-between items-end mt-auto ${gridColumns > 7 ? 'pt-1' : 'pt-2 border-t border-slate-100'}`}>
+                            <div>
+                              {gridColumns <= 6 && <p className="text-[10px] text-slate-400">Precio</p>}
+                              <p className={`font-bold text-slate-900 ${gridColumns > 7 ? 'text-xs' : 'text-lg'}`}>${product.price}</p>
+                            </div>
+                            {gridColumns <= 8 && (
+                              <div className="text-right">
+                                {gridColumns <= 6 && <p className="text-[10px] text-slate-400">Stock</p>}
+                                <p className={`font-bold ${stockColor} ${gridColumns > 7 ? 'text-xs' : 'text-sm'}`}>
+                                  {product.stock}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                /* --- VISTA LISTA (LIST) --- */
+                <div className="flex flex-col gap-2">
+                  {filteredInventory.map((product) => {
+                    const isSelected = selectedProduct?.id === product.id;
+                    const stockColor = getStockColorClass(product.stock);
+                    const isOutOfStock = product.stock === 0;
+
+                    return (
+                      <div
+                        key={product.id}
+                        onClick={() => handleCardClick(product)}
+                        className={`bg-white rounded-lg border p-3 flex items-center gap-4 cursor-pointer transition-all hover:shadow-md ${
+                          isSelected ? 'ring-2 ring-fuchsia-500 border-fuchsia-500 bg-fuchsia-50' : 'hover:border-fuchsia-200'
+                        } ${isOutOfStock ? 'grayscale opacity-75' : ''}`}
+                      >
+                        <div className="w-12 h-12 rounded-md bg-slate-100 flex items-center justify-center overflow-hidden shrink-0 border relative">
+                          {product.image ? (
+                            <img src={product.image} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-slate-200 text-[8px] font-bold text-center text-slate-500 leading-none p-1">
+                                {product.title.slice(0,10)}...
+                            </div>
+                          )}
+                          {isOutOfStock && (
+                            <div className="absolute inset-0 bg-white/60 flex items-center justify-center">
+                                <X size={16} className="text-red-500"/>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-bold text-slate-800 truncate">{product.title}</h4>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-[10px] bg-slate-100 px-2 py-0.5 rounded text-slate-500 font-bold border border-slate-200">
+                                {Array.isArray(product.categories) ? product.categories[0] : product.category}
+                            </span>
+                            <span className="text-xs text-slate-400 flex items-center gap-1">
+                                <ScanBarcode size={10} /> {product.barcode || '-'}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-6 mr-2">
+                            <div className="text-right">
+                                <p className="text-[10px] text-slate-400 uppercase font-bold">Stock</p>
+                                <p className={`font-bold ${stockColor}`}>
+                                    {isOutOfStock ? 'SIN STOCK' : `${product.stock} u.`}
+                                </p>
+                            </div>
+                            <div className="text-right w-20">
+                                <p className="text-[10px] text-slate-400 uppercase font-bold">Precio</p>
+                                <p className="font-bold text-lg text-fuchsia-600">${product.price}</p>
+                            </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
         </div>
       </div>
 
-      {/* --- LISTADO --- */}
-      <div className="flex-1 overflow-y-auto pr-1">
-        {filteredInventory.length === 0 ? (
-          <div className="h-64 flex flex-col items-center justify-center text-slate-400 border-2 border-dashed border-slate-200 rounded-xl m-4">
-            <Package size={48} className="mb-2 opacity-50" />
-            <p className="font-bold">No se encontraron productos</p>
-            <p className="text-xs">Intenta con otro término de búsqueda</p>
+      {/* ================================================= */}
+      {/* COLUMNA DERECHA: PANEL DE GESTIÓN (HUD)           */}
+      {/* ================================================= */}
+      {selectedProduct && (
+        <div className="w-[320px] bg-white border-l shadow-2xl flex flex-col shrink-0 animate-in slide-in-from-right duration-300 relative z-20">
+          
+          <div className="p-4 border-b flex justify-between items-start bg-slate-50">
+            <div>
+              <h3 className="font-bold text-slate-800 text-lg">Gestión de Stock</h3>
+              <p className="text-xs text-slate-500">ID: {String(selectedProduct.id).padStart(6, '0')}</p>
+            </div>
+            <button 
+              onClick={() => setSelectedProduct(null)}
+              className="text-slate-400 hover:text-slate-700 hover:bg-slate-200 p-1 rounded-full transition"
+            >
+              <X size={20} />
+            </button>
           </div>
-        ) : inventoryViewMode === 'grid' ? (
-          /* --- VISTA GRILLA REDISEÑADA Y COMPACTA --- */
-          <div className={`grid ${getGridClasses()} pb-20`}>
-            {filteredInventory.map((item) => (
-              <div
-                key={item.id}
-                className="group bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all duration-200 flex flex-col overflow-hidden relative"
-              >
-                {/* Imagen: CORREGIDO para llenar el espacio */}
-                <div className="aspect-square bg-white relative overflow-hidden border-b border-slate-200">
-                  <div 
-                    onClick={() => {
-                        setSelectedImage(item.image || null);
-                        if(item.image) setIsImageModalOpen(true);
-                    }}
-                    className="w-full h-full cursor-zoom-in"
-                  >
-                    <ProductImage
-                      item={item}
-                      // CAMBIO CLAVE: object-cover para rellenar, sin padding (p-0)
-                      className={`w-full h-full object-cover transition-transform duration-500 group-hover:scale-105 ${item.stock === 0 ? 'grayscale opacity-60' : ''}`}
-                    />
-                  </div>
-                  
-                  {/* Overlay AGOTADO */}
-                  {item.stock === 0 && (
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <div className="absolute inset-0 bg-white/40 backdrop-blur-[1px]"></div>
-                      <span className="relative bg-slate-800 text-white text-[9px] font-bold px-2 py-0.5 rounded shadow-sm border border-slate-600 transform -rotate-6">
-                        SIN STOCK
-                      </span>
-                    </div>
-                  )}
 
-                  {/* Acciones Flotantes */}
-                  <div className="absolute top-1.5 right-1.5 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
-                     <button
-                        onClick={() => setEditingProduct(item)}
-                        className="bg-white p-1.5 rounded-full shadow-sm text-blue-600 hover:bg-blue-50 hover:text-blue-700 transition-colors border border-slate-100"
-                        title="Editar"
-                     >
-                        <Edit3 size={12} />
-                     </button>
-                     <button
-                        onClick={() => handleDeleteProduct(item.id)}
-                        className="bg-white p-1.5 rounded-full shadow-sm text-red-500 hover:bg-red-50 hover:text-red-700 transition-colors border border-slate-100"
-                        title="Eliminar"
-                     >
-                        <Trash2 size={12} />
-                     </button>
+          <div className="flex-1 overflow-y-auto p-5 space-y-6">
+            
+            {/* 1. Preview Producto */}
+            <div className="text-center">
+              <div className="w-32 h-32 bg-slate-100 rounded-xl mx-auto mb-3 overflow-hidden border shadow-sm relative group">
+                {selectedProduct.image ? (
+                  <img src={selectedProduct.image} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center bg-slate-200 text-slate-500 font-bold p-2 text-sm">
+                    {selectedProduct.title}
                   </div>
-                </div>
-
-                {/* Contenido Compacto */}
-                <div className="p-2 flex flex-col flex-1">
-                  {/* Categoría */}
-                  <p className="text-[8px] text-slate-400 font-bold uppercase tracking-wide truncate mb-0.5">
-                    {Array.isArray(item.categories) && item.categories.length > 0
-                        ? item.categories[0]
-                        : item.category || 'Sin cat.'}
-                    {Array.isArray(item.categories) && item.categories.length > 1 && ` +${item.categories.length - 1}`}
-                  </p>
-                  
-                  {/* Título (Más compacto) */}
-                  <h3 className="text-[10px] font-bold text-slate-800 leading-tight line-clamp-2 mb-1.5 min-h-[2.4em]">
-                    {item.title}
-                  </h3>
-
-                  {/* Footer: Precio y Stock */}
-                  <div className="mt-auto flex items-end justify-between pt-1.5 border-t border-slate-50">
-                     <span className="text-xs font-bold text-fuchsia-600 leading-none">
-                        ${item.price.toLocaleString()}
-                     </span>
-                     <div className="text-right">
-                        {renderStockBadge(item.stock)}
-                     </div>
-                  </div>
-                </div>
+                )}
+                {/* Botón rápido para cambiar imagen */}
+                <button 
+                   onClick={() => setEditingProduct(selectedProduct)} 
+                   className="absolute inset-0 bg-black/40 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity font-bold text-xs"
+                >
+                  <Edit size={16} className="mr-1" /> Cambiar
+                </button>
               </div>
-            ))}
-          </div>
-        ) : (
-          /* --- VISTA LISTA --- */
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-20">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 text-slate-500 font-bold uppercase border-b text-[10px]">
-                <tr>
-                  <th className="p-2 w-12 text-center"><ImageIcon size={12} /></th>
-                  <th className="p-2">Producto</th>
-                  <th className="p-2 hidden sm:table-cell">Categoría</th>
-                  <th className="p-2 text-right">Precio</th>
-                  <th className="p-2 text-center">Stock</th>
-                  <th className="p-2 text-right">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-[11px]">
-                {filteredInventory.map((item) => (
-                  <tr key={item.id} className="hover:bg-slate-50/80 transition-colors group">
-                    <td className="p-2">
-                      <div className="w-8 h-8 rounded bg-white border border-slate-200 overflow-hidden mx-auto">
-                        <ProductImage item={item} className="w-full h-full object-cover" />
-                      </div>
-                    </td>
-                    <td className="p-2">
-                      <p className="font-bold text-slate-800">{item.title}</p>
-                      <p className="text-[9px] text-slate-400 sm:hidden">
-                        {Array.isArray(item.categories) ? item.categories.join(', ') : item.category}
-                      </p>
-                    </td>
-                    <td className="p-2 hidden sm:table-cell text-slate-600">
-                       {Array.isArray(item.categories) ? (
-                            <div className="flex flex-wrap gap-1">
-                                {item.categories.slice(0, 2).map(c => (
-                                    <span key={c} className="bg-slate-100 px-1 py-0.5 rounded text-[9px]">{c}</span>
-                                ))}
-                                {item.categories.length > 2 && <span className="text-[9px] text-slate-400">+{item.categories.length - 2}</span>}
-                            </div>
-                       ) : (
-                            <span className="bg-slate-100 px-1 py-0.5 rounded text-[9px]">{item.category}</span>
-                       )}
-                    </td>
-                    <td className="p-2 text-right font-bold text-fuchsia-600">
-                      ${item.price.toLocaleString()}
-                    </td>
-                    <td className="p-2 text-center">
-                      {renderStockBadge(item.stock)}
-                    </td>
-                    <td className="p-2 text-right">
-                      <div className="flex items-center justify-end gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => setEditingProduct(item)}
-                          className="p-1 text-blue-600 bg-blue-50 rounded hover:bg-blue-100 border border-blue-200 transition-colors"
-                          title="Editar"
-                        >
-                          <Edit3 size={12} />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteProduct(item.id)}
-                          className="p-1 text-red-600 bg-red-50 rounded hover:bg-red-100 border border-red-200 transition-colors"
-                          title="Eliminar"
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+              <h2 className="font-bold text-xl text-slate-800 leading-tight mb-1">{selectedProduct.title}</h2>
+              <div className="flex justify-center gap-2 flex-wrap">
+                {(selectedProduct.categories || []).map(cat => (
+                  <span key={cat} className="px-2 py-0.5 bg-fuchsia-100 text-fuchsia-700 text-[10px] font-bold rounded-full border border-fuchsia-200">
+                    {cat}
+                  </span>
                 ))}
-              </tbody>
-            </table>
+              </div>
+            </div>
+
+            {/* 2. Estadísticas Rápidas */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3 bg-blue-50 rounded-xl border border-blue-100">
+                <div className="flex items-center gap-2 text-blue-600 mb-1">
+                  <Package size={16} />
+                  <span className="text-xs font-bold uppercase">Stock</span>
+                </div>
+                <p className={`text-2xl font-bold ${getStockColorClass(selectedProduct.stock)}`}>
+                    {selectedProduct.stock}
+                </p>
+              </div>
+              <div className="p-3 bg-green-50 rounded-xl border border-green-100">
+                <div className="flex items-center gap-2 text-green-600 mb-1">
+                  <DollarSign size={16} />
+                  <span className="text-xs font-bold uppercase">Precio</span>
+                </div>
+                <p className="text-2xl font-bold text-green-900">${selectedProduct.price}</p>
+              </div>
+            </div>
+
+            {/* 3. Datos Informativos */}
+            <div className="bg-slate-50 rounded-xl p-4 space-y-3 border">
+              <div className="flex justify-between items-center text-sm border-b border-slate-200 pb-2">
+                <span className="text-slate-500 flex items-center gap-2"><ScanBarcode size={14} /> Código</span>
+                <span className="font-mono font-bold text-slate-700">{selectedProduct.barcode || '-'}</span>
+              </div>
+              <div className="flex justify-between items-center text-sm border-b border-slate-200 pb-2">
+                <span className="text-slate-500 flex items-center gap-2"><DollarSign size={14} /> Costo</span>
+                <span className="font-bold text-slate-700">${selectedProduct.purchasePrice || 0}</span>
+              </div>
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-slate-500 flex items-center gap-2"><BarChart3 size={14} /> Margen</span>
+                <span className="font-bold text-green-600">
+                  {selectedProduct.price && selectedProduct.purchasePrice 
+                    ? `${Math.round(((selectedProduct.price - selectedProduct.purchasePrice) / selectedProduct.purchasePrice) * 100)}%`
+                    : '0%'}
+                </span>
+              </div>
+            </div>
+
+            {/* 4. Acciones Principales */}
+            <div className="space-y-3 pt-2">
+              <button
+                onClick={() => setEditingProduct(selectedProduct)}
+                className="w-full py-3 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-900 transition flex items-center justify-center gap-2 shadow-lg"
+              >
+                <Edit size={18} /> Editar Detalles
+              </button>
+              
+              <button
+                onClick={() => {
+                    handleDeleteProduct(selectedProduct.id);
+                    setSelectedProduct(null); 
+                }}
+                className="w-full py-3 bg-white text-red-600 border border-red-200 rounded-xl font-bold hover:bg-red-50 transition flex items-center justify-center gap-2"
+              >
+                <Trash2 size={18} /> Eliminar Producto
+              </button>
+            </div>
+
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
     </div>
   );
 }
