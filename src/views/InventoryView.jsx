@@ -1,12 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Search,
-  List,
-  LayoutGrid,
   Plus,
-  Edit2,
-  Trash2,
   Filter,
+  Edit3,
+  Trash2,
+  Package,
+  Grid3x3,
+  LayoutGrid,
+  Maximize,
+  Image as ImageIcon,
+  MoreVertical
 } from 'lucide-react';
 import ProductImage from '../components/ProductImage';
 
@@ -14,7 +18,7 @@ export default function InventoryView({
   inventory,
   categories,
   currentUser,
-  inventoryViewMode,
+  inventoryViewMode, // 'grid' | 'list'
   setInventoryViewMode,
   inventorySearch,
   setInventorySearch,
@@ -26,348 +30,354 @@ export default function InventoryView({
   setSelectedImage,
   setIsImageModalOpen,
 }) {
-  const [gridSize, setGridSize] = useState('medium'); // 'small' | 'medium' | 'large'
+  const [gridSize, setGridSize] = useState('normal'); // 'small' | 'normal' | 'large'
 
-  // Protección contra inventario nulo
-  const safeInventory = Array.isArray(inventory) ? inventory : [];
+  // Filtrado
+  const filteredInventory = useMemo(() => {
+    return (inventory || []).filter((item) => {
+      const matchesSearch =
+        item.title.toLowerCase().includes(inventorySearch.toLowerCase()) ||
+        (item.brand &&
+          item.brand.toLowerCase().includes(inventorySearch.toLowerCase()));
 
-  // Filtro seguro
-  const filteredInventory = safeInventory.filter((item) => {
-    if (!item) return false;
-
-    // Normalizar categorías del item
-    const itemCategories =
-      Array.isArray(item.categories) && item.categories.length > 0
+      const itemCategories = Array.isArray(item.categories) && item.categories.length > 0
         ? item.categories
         : item.category
         ? [item.category]
         : [];
 
-    const itemTitle = (item.title || '').toLowerCase();
-    const itemBrand = (item.brand || '').toLowerCase();
-    const search = (inventorySearch || '').toLowerCase();
+      const matchesCategory =
+        inventoryCategoryFilter === 'Todas' ||
+        itemCategories.includes(inventoryCategoryFilter);
 
-    // Filtro de categoría
-    const matchCat =
-      inventoryCategoryFilter === 'Todas' ||
-      itemCategories.includes(inventoryCategoryFilter);
+      return matchesSearch && matchesCategory;
+    });
+  }, [inventory, inventorySearch, inventoryCategoryFilter]);
 
-    const matchSearch =
-      itemTitle.includes(search) || itemBrand.includes(search);
+  // Lógica de Stock Visual (Badge)
+  const renderStockBadge = (stock) => {
+    if (stock === 0) {
+      return (
+        <span className="bg-slate-800 text-white text-[9px] px-1.5 py-0.5 rounded font-bold shadow-sm">
+          AGOTADO
+        </span>
+      );
+    }
+    if (stock < 5) {
+      return (
+        <span className="bg-red-100 text-red-700 text-[9px] px-1.5 py-0.5 rounded font-bold border border-red-200">
+          {stock}
+        </span>
+      );
+    }
+    if (stock < 10) {
+      return (
+        <span className="bg-amber-100 text-amber-700 text-[9px] px-1.5 py-0.5 rounded font-bold border border-amber-200">
+          {stock}
+        </span>
+      );
+    }
+    return (
+      <span className="bg-green-100 text-green-700 text-[9px] px-1.5 py-0.5 rounded font-bold border border-green-200">
+        {stock}
+      </span>
+    );
+  };
 
-    return matchCat && matchSearch;
-  });
-
-  // Clases dinámicas para la grilla
+  // Clases de Grilla Dinámica
   const getGridClasses = () => {
     switch (gridSize) {
-      case 'small': // ~8 cols
-        return 'grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2';
-      case 'medium': // ~6 cols
+      case 'small':
+        return 'grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-7 gap-2';
+      case 'normal':
         return 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3';
-      case 'large': // ~4 cols
-        return 'grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4';
+      case 'large':
+        return 'grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3';
       default:
         return 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3';
     }
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border flex flex-col h-full overflow-hidden">
-      {/* Toolbar Compacto */}
-      <div className="p-2 border-b flex flex-wrap justify-between items-center gap-2 bg-slate-50 shrink-0">
-        <div className="flex items-center gap-2">
-          <h3 className="font-bold text-sm text-slate-800">Inventario</h3>
-          <span className="text-xs bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full font-bold">
-            {filteredInventory.length}
-          </span>
-        </div>
+    <div className="flex flex-col h-full bg-slate-100">
+      {/* --- HEADER DE CONTROLES (COMPACTO) --- */}
+      <div className="bg-white p-2 rounded-xl shadow-sm border border-slate-200 mb-2 flex flex-col sm:flex-row gap-2 items-center justify-between shrink-0">
+        <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto no-scrollbar">
+          {/* Botón Agregar Compacto */}
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="bg-slate-900 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-slate-800 transition-colors flex items-center gap-1.5 shadow-sm whitespace-nowrap"
+          >
+            <Plus size={14} /> <span className="hidden sm:inline">Nuevo</span>
+            <span className="sm:hidden">+</span>
+          </button>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Buscador */}
-          <div className="relative">
+          <div className="h-5 w-px bg-slate-200 mx-1"></div>
+
+          {/* Buscador Compacto */}
+          <div className="relative flex-1 sm:w-56">
             <Search
-              className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400"
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
               size={14}
             />
             <input
               type="text"
               placeholder="Buscar..."
-              className="pl-8 pr-2 py-1.5 bg-white border rounded text-xs w-40 focus:outline-none focus:ring-1 focus:ring-fuchsia-500"
+              className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-500 transition-all"
               value={inventorySearch}
               onChange={(e) => setInventorySearch(e.target.value)}
             />
           </div>
+        </div>
 
-          {/* Filtro Categoría */}
-          <select
-            className="px-2 py-1.5 bg-white border rounded text-xs focus:outline-none max-w-[120px] cursor-pointer"
-            value={inventoryCategoryFilter}
-            onChange={(e) => setInventoryCategoryFilter(e.target.value)}
-          >
-            <option value="Todas">Todas</option>
-            {(categories || []).map((cat) => (
-              <option key={cat} value={cat}>
-                {cat}
-              </option>
-            ))}
-          </select>
-
-          <div className="h-6 w-px bg-slate-200 mx-1"></div>
-
-          {/* Selector de Tamaño (Solo visible en modo Grid) */}
-          {inventoryViewMode === 'grid' && (
-            <div className="flex bg-white rounded border overflow-hidden">
-              <button
-                onClick={() => setGridSize('small')}
-                className={`px-2 py-1 text-[10px] font-bold hover:bg-slate-50 ${
-                  gridSize === 'small'
-                    ? 'bg-slate-100 text-fuchsia-700'
-                    : 'text-slate-500'
-                }`}
-                title="Chico"
-              >
-                Chico
-              </button>
-              <button
-                onClick={() => setGridSize('medium')}
-                className={`px-2 py-1 text-[10px] font-bold hover:bg-slate-50 ${
-                  gridSize === 'medium'
-                    ? 'bg-slate-100 text-fuchsia-700'
-                    : 'text-slate-500'
-                }`}
-                title="Mediano"
-              >
-                Med
-              </button>
-              <button
-                onClick={() => setGridSize('large')}
-                className={`px-2 py-1 text-[10px] font-bold hover:bg-slate-50 ${
-                  gridSize === 'large'
-                    ? 'bg-slate-100 text-fuchsia-700'
-                    : 'text-slate-500'
-                }`}
-                title="Grande"
-              >
-                Grande
-              </button>
-            </div>
-          )}
-
-          {/* Selector de Vista */}
-          <div className="flex border rounded overflow-hidden bg-white ml-1">
-            <button
-              onClick={() => setInventoryViewMode('list')}
-              className={`p-1.5 ${
-                inventoryViewMode === 'list'
-                  ? 'bg-slate-800 text-white'
-                  : 'text-slate-400 hover:bg-slate-100'
-              }`}
+        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+          {/* Filtro Categoría Compacto */}
+          <div className="relative max-w-[140px] w-full">
+            <Filter
+              className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+              size={12}
+            />
+            <select
+              className="w-full pl-7 pr-6 py-1.5 text-[11px] bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-500 cursor-pointer appearance-none font-medium text-slate-600 shadow-sm hover:bg-slate-50 truncate"
+              value={inventoryCategoryFilter}
+              onChange={(e) => setInventoryCategoryFilter(e.target.value)}
             >
-              <List size={14} />
-            </button>
-            <button
-              onClick={() => setInventoryViewMode('grid')}
-              className={`p-1.5 ${
-                inventoryViewMode === 'grid'
-                  ? 'bg-slate-800 text-white'
-                  : 'text-slate-400 hover:bg-slate-100'
-              }`}
-            >
-              <LayoutGrid size={14} />
-            </button>
+              <option value="Todas">Todas</option>
+              {(categories || []).map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+            </select>
           </div>
 
-          {currentUser.role === 'admin' && (
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="bg-fuchsia-600 text-white px-3 py-1.5 rounded text-xs flex items-center gap-1 hover:bg-fuchsia-700 shadow-sm font-bold ml-2"
-            >
-              <Plus size={14} /> Nuevo
-            </button>
-          )}
+          {/* Controles de Vista Compactos */}
+          <div className="flex items-center gap-2 shrink-0">
+             {/* Switch Grid/List */}
+            <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+                <button
+                onClick={() => setInventoryViewMode('grid')}
+                className={`p-1 rounded-md transition-all ${
+                    inventoryViewMode === 'grid'
+                    ? 'bg-white shadow-sm text-fuchsia-600'
+                    : 'text-slate-400 hover:text-slate-600'
+                }`}
+                title="Grilla"
+                >
+                <LayoutGrid size={14} />
+                </button>
+                <button
+                onClick={() => setInventoryViewMode('list')}
+                className={`p-1 rounded-md transition-all ${
+                    inventoryViewMode === 'list'
+                    ? 'bg-white shadow-sm text-fuchsia-600'
+                    : 'text-slate-400 hover:text-slate-600'
+                }`}
+                title="Lista"
+                >
+                <MoreVertical size={14} className="rotate-90" />
+                </button>
+            </div>
+
+            {/* Tamaño de Grilla */}
+            {inventoryViewMode === 'grid' && (
+                <div className="hidden md:flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+                <button
+                    onClick={() => setGridSize('small')}
+                    className={`p-1 rounded-md transition-all ${
+                    gridSize === 'small'
+                        ? 'bg-white shadow-sm text-fuchsia-600'
+                        : 'text-slate-400 hover:text-slate-600'
+                    }`}
+                    title="Chico"
+                >
+                    <Grid3x3 size={14} />
+                </button>
+                <button
+                    onClick={() => setGridSize('normal')}
+                    className={`p-1 rounded-md transition-all ${
+                    gridSize === 'normal'
+                        ? 'bg-white shadow-sm text-fuchsia-600'
+                        : 'text-slate-400 hover:text-slate-600'
+                    }`}
+                    title="Normal"
+                >
+                    <LayoutGrid size={14} />
+                </button>
+                <button
+                    onClick={() => setGridSize('large')}
+                    className={`p-1 rounded-md transition-all ${
+                    gridSize === 'large'
+                        ? 'bg-white shadow-sm text-fuchsia-600'
+                        : 'text-slate-400 hover:text-slate-600'
+                    }`}
+                    title="Grande"
+                >
+                    <Maximize size={14} />
+                </button>
+                </div>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-3 bg-slate-50/50">
+      {/* --- LISTADO --- */}
+      <div className="flex-1 overflow-y-auto pr-1">
         {filteredInventory.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-slate-400 text-sm">
-            <p>No se encontraron productos.</p>
-            <p className="text-xs">
-              Prueba cambiando el filtro de categoría o la búsqueda.
-            </p>
+          <div className="h-64 flex flex-col items-center justify-center text-slate-400 border-2 border-dashed border-slate-200 rounded-xl m-4">
+            <Package size={48} className="mb-2 opacity-50" />
+            <p className="font-bold">No se encontraron productos</p>
+            <p className="text-xs">Intenta con otro término de búsqueda</p>
           </div>
-        ) : inventoryViewMode === 'list' ? (
-          <div className="bg-white rounded border shadow-sm overflow-hidden">
-            <table className="w-full text-xs">
-              <thead className="bg-slate-50 text-slate-500 font-medium sticky top-0 z-10">
-                <tr>
-                  <th className="px-2 py-2 text-left w-10">Img</th>
-                  <th className="px-2 py-2 text-left">Producto</th>
-                  <th className="px-2 py-2 text-left">Categorías</th>
-                  {currentUser.role === 'admin' && (
-                    <th className="px-2 py-2 text-left">Costo</th>
-                  )}
-                  <th className="px-2 py-2 text-left">Precio</th>
-                  <th className="px-2 py-2 text-left">Stock</th>
-                  {currentUser.role === 'admin' && (
-                    <th className="px-2 py-2 text-center">Acciones</th>
-                  )}
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {filteredInventory.map((item) => {
-                  const isOutOfStock = item.stock === 0;
-                  const isLowStock = item.stock > 0 && item.stock < 10;
-                  
-                  return (
-                    <tr key={item.id} className="hover:bg-slate-50 group">
-                      <td className="px-2 py-2">
-                        <ProductImage
-                          item={item}
-                          className="w-8 h-8 rounded bg-slate-100 object-cover border"
-                          onClick={() => {
-                            setSelectedImage(item.image);
-                            setIsImageModalOpen(true);
-                          }}
-                        />
-                      </td>
-                      <td className="px-2 py-2 font-medium text-slate-900">
-                        {item.title}
-                      </td>
-                      <td className="px-2 py-2 text-slate-500">
-                        {Array.isArray(item.categories) &&
-                        item.categories.length > 0
-                          ? item.categories.join(', ')
-                          : item.category}
-                      </td>
-                      {currentUser.role === 'admin' && (
-                        <td className="px-2 py-2 text-slate-400">
-                          ${item.purchasePrice?.toLocaleString()}
-                        </td>
-                      )}
-                      <td className="px-2 py-2 font-bold">
-                        ${item.price.toLocaleString()}
-                      </td>
-                      <td className="px-2 py-2">
-                        <span
-                          className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                            isOutOfStock
-                              ? 'bg-red-200 text-red-800'
-                              : isLowStock
-                              ? 'bg-amber-100 text-amber-800'
-                              : 'bg-green-50 text-green-700'
-                          }`}
-                        >
-                          {isOutOfStock ? 'AGOTADO' : item.stock}
-                        </span>
-                      </td>
-                      {currentUser.role === 'admin' && (
-                        <td className="px-2 py-2 text-center opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() => setEditingProduct({ ...item })}
-                            className="text-blue-500 hover:bg-blue-50 p-1 rounded mr-1"
-                            title="Editar"
-                          >
-                            <Edit2 size={14} />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteProduct(item.id)}
-                            className="text-red-500 hover:bg-red-50 p-1 rounded"
-                            title="Eliminar"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </td>
-                      )}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className={`grid ${getGridClasses()}`}>
-            {filteredInventory.map((item) => {
-              const isOutOfStock = item.stock === 0;
-              const isLowStock = item.stock > 0 && item.stock < 10;
-              
-              return (
-                <div
-                  key={item.id}
-                  className="bg-white rounded border overflow-hidden shadow-sm hover:shadow transition flex flex-col group"
-                >
-                  <div className="relative aspect-square">
+        ) : inventoryViewMode === 'grid' ? (
+          /* --- VISTA GRILLA REDISEÑADA Y COMPACTA --- */
+          <div className={`grid ${getGridClasses()} pb-20`}>
+            {filteredInventory.map((item) => (
+              <div
+                key={item.id}
+                className="group bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all duration-200 flex flex-col overflow-hidden relative"
+              >
+                {/* Imagen: CORREGIDO para llenar el espacio */}
+                <div className="aspect-square bg-white relative overflow-hidden border-b border-slate-200">
+                  <div 
+                    onClick={() => {
+                        setSelectedImage(item.image || null);
+                        if(item.image) setIsImageModalOpen(true);
+                    }}
+                    className="w-full h-full cursor-zoom-in"
+                  >
                     <ProductImage
                       item={item}
-                      className="w-full h-full object-contain bg-white"
-                      onClick={() => {
-                        setSelectedImage(item.image);
-                        setIsImageModalOpen(true);
-                      }}
+                      // CAMBIO CLAVE: object-cover para rellenar, sin padding (p-0)
+                      className={`w-full h-full object-cover transition-transform duration-500 group-hover:scale-105 ${item.stock === 0 ? 'grayscale opacity-60' : ''}`}
                     />
-                    {(isLowStock || isOutOfStock) && (
-                      <div className={`absolute top-1 right-1 text-white text-[9px] px-1.5 py-0.5 rounded font-bold shadow-sm ${
-                        isOutOfStock ? 'bg-red-600' : 'bg-amber-500'
-                      }`}>
-                        {isOutOfStock ? 'AGOTADO' : 'BAJO'}
-                      </div>
-                    )}
                   </div>
-                  <div className="p-2 flex-1 flex flex-col border-t">
-                    <span className="text-[9px] text-fuchsia-600 font-bold uppercase mb-0.5 truncate block">
-                      {Array.isArray(item.categories) &&
-                      item.categories.length > 0
-                        ? item.categories.join(', ')
-                        : item.category}
-                    </span>
-                    <h4
-                      className={`font-bold text-slate-800 leading-tight flex-1 line-clamp-2 mb-1 ${
-                        gridSize === 'small' ? 'text-[10px]' : 'text-xs'
-                      }`}
-                    >
-                      {item.title}
-                    </h4>
-                    <div className="flex justify-between items-end mt-auto">
-                      <span
-                        className={`font-bold text-slate-900 ${
-                          gridSize === 'small' ? 'text-xs' : 'text-sm'
-                        }`}
-                      >
-                        ${item.price.toLocaleString()}
-                      </span>
-                      <span className={`text-[10px] ${
-                        isOutOfStock 
-                          ? 'text-red-600 font-bold' 
-                          : isLowStock 
-                          ? 'text-amber-600 font-bold' 
-                          : 'text-slate-500'
-                      }`}>
-                        {isOutOfStock ? 'Sin Stock' : `${item.stock}u`}
+                  
+                  {/* Overlay AGOTADO */}
+                  {item.stock === 0 && (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <div className="absolute inset-0 bg-white/40 backdrop-blur-[1px]"></div>
+                      <span className="relative bg-slate-800 text-white text-[9px] font-bold px-2 py-0.5 rounded shadow-sm border border-slate-600 transform -rotate-6">
+                        SIN STOCK
                       </span>
                     </div>
+                  )}
 
-                    {currentUser.role === 'admin' && (
-                      <div className="flex gap-1 mt-2 pt-2 border-t border-dashed opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                  {/* Acciones Flotantes */}
+                  <div className="absolute top-1.5 right-1.5 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+                     <button
+                        onClick={() => setEditingProduct(item)}
+                        className="bg-white p-1.5 rounded-full shadow-sm text-blue-600 hover:bg-blue-50 hover:text-blue-700 transition-colors border border-slate-100"
+                        title="Editar"
+                     >
+                        <Edit3 size={12} />
+                     </button>
+                     <button
+                        onClick={() => handleDeleteProduct(item.id)}
+                        className="bg-white p-1.5 rounded-full shadow-sm text-red-500 hover:bg-red-50 hover:text-red-700 transition-colors border border-slate-100"
+                        title="Eliminar"
+                     >
+                        <Trash2 size={12} />
+                     </button>
+                  </div>
+                </div>
+
+                {/* Contenido Compacto */}
+                <div className="p-2 flex flex-col flex-1">
+                  {/* Categoría */}
+                  <p className="text-[8px] text-slate-400 font-bold uppercase tracking-wide truncate mb-0.5">
+                    {Array.isArray(item.categories) && item.categories.length > 0
+                        ? item.categories[0]
+                        : item.category || 'Sin cat.'}
+                    {Array.isArray(item.categories) && item.categories.length > 1 && ` +${item.categories.length - 1}`}
+                  </p>
+                  
+                  {/* Título (Más compacto) */}
+                  <h3 className="text-[10px] font-bold text-slate-800 leading-tight line-clamp-2 mb-1.5 min-h-[2.4em]">
+                    {item.title}
+                  </h3>
+
+                  {/* Footer: Precio y Stock */}
+                  <div className="mt-auto flex items-end justify-between pt-1.5 border-t border-slate-50">
+                     <span className="text-xs font-bold text-fuchsia-600 leading-none">
+                        ${item.price.toLocaleString()}
+                     </span>
+                     <div className="text-right">
+                        {renderStockBadge(item.stock)}
+                     </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          /* --- VISTA LISTA --- */
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-20">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50 text-slate-500 font-bold uppercase border-b text-[10px]">
+                <tr>
+                  <th className="p-2 w-12 text-center"><ImageIcon size={12} /></th>
+                  <th className="p-2">Producto</th>
+                  <th className="p-2 hidden sm:table-cell">Categoría</th>
+                  <th className="p-2 text-right">Precio</th>
+                  <th className="p-2 text-center">Stock</th>
+                  <th className="p-2 text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-[11px]">
+                {filteredInventory.map((item) => (
+                  <tr key={item.id} className="hover:bg-slate-50/80 transition-colors group">
+                    <td className="p-2">
+                      <div className="w-8 h-8 rounded bg-white border border-slate-200 overflow-hidden mx-auto">
+                        <ProductImage item={item} className="w-full h-full object-cover" />
+                      </div>
+                    </td>
+                    <td className="p-2">
+                      <p className="font-bold text-slate-800">{item.title}</p>
+                      <p className="text-[9px] text-slate-400 sm:hidden">
+                        {Array.isArray(item.categories) ? item.categories.join(', ') : item.category}
+                      </p>
+                    </td>
+                    <td className="p-2 hidden sm:table-cell text-slate-600">
+                       {Array.isArray(item.categories) ? (
+                            <div className="flex flex-wrap gap-1">
+                                {item.categories.slice(0, 2).map(c => (
+                                    <span key={c} className="bg-slate-100 px-1 py-0.5 rounded text-[9px]">{c}</span>
+                                ))}
+                                {item.categories.length > 2 && <span className="text-[9px] text-slate-400">+{item.categories.length - 2}</span>}
+                            </div>
+                       ) : (
+                            <span className="bg-slate-100 px-1 py-0.5 rounded text-[9px]">{item.category}</span>
+                       )}
+                    </td>
+                    <td className="p-2 text-right font-bold text-fuchsia-600">
+                      ${item.price.toLocaleString()}
+                    </td>
+                    <td className="p-2 text-center">
+                      {renderStockBadge(item.stock)}
+                    </td>
+                    <td className="p-2 text-right">
+                      <div className="flex items-center justify-end gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
-                          onClick={() => setEditingProduct({ ...item })}
-                          className="flex-1 text-[10px] bg-blue-50 text-blue-600 py-1 rounded hover:bg-blue-100 flex items-center justify-center gap-1"
+                          onClick={() => setEditingProduct(item)}
+                          className="p-1 text-blue-600 bg-blue-50 rounded hover:bg-blue-100 border border-blue-200 transition-colors"
+                          title="Editar"
                         >
-                          <Edit2 size={12} />
+                          <Edit3 size={12} />
                         </button>
                         <button
                           onClick={() => handleDeleteProduct(item.id)}
-                          className="flex-1 text-[10px] bg-red-50 text-red-600 py-1 rounded hover:bg-red-100 flex items-center justify-center gap-1"
+                          className="p-1 text-red-600 bg-red-50 rounded hover:bg-red-100 border border-red-200 transition-colors"
+                          title="Eliminar"
                         >
                           <Trash2 size={12} />
                         </button>
                       </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>

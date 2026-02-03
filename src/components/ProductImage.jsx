@@ -1,4 +1,3 @@
-// src/components/ProductImage.jsx
 import React from 'react';
 import { getColorForItem } from '../data';
 
@@ -15,6 +14,7 @@ const ProductImage = ({ item, className = '', onClick }) => {
         <img
           src={item.image}
           alt={item.title}
+          // Aseguramos object-cover para que rellene siempre el contenedor
           className="w-full h-full object-cover"
         />
       </div>
@@ -27,7 +27,8 @@ const ProductImage = ({ item, className = '', onClick }) => {
       style={{ backgroundColor: bgColor }}
       onClick={onClick}
     >
-      <span className="text-white font-bold text-center leading-tight text-[9px] line-clamp-3">
+      {/* MODIFICADO: Texto aumentado a text-xs (aprox 12px) y ajuste de palabras */}
+      <span className="text-white font-bold text-center leading-tight text-xs break-words line-clamp-4 px-1">
         {item.title}
       </span>
     </div>

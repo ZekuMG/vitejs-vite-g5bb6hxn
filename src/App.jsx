@@ -48,7 +48,6 @@ const CategoryMultiSelect = ({
   selectedCategories,
   onChange,
 }) => {
-  // Asegurar que selectedCategories sea un array
   const safeSelected = Array.isArray(selectedCategories)
     ? selectedCategories
     : [];
@@ -58,7 +57,6 @@ const CategoryMultiSelect = ({
     if (val && !safeSelected.includes(val)) {
       onChange([...safeSelected, val]);
     }
-    // Resetear el select visualmente
     e.target.value = '';
   };
 
@@ -66,7 +64,6 @@ const CategoryMultiSelect = ({
     onChange(safeSelected.filter((c) => c !== catToRemove));
   };
 
-  // Filtrar categorías disponibles para agregar (las que no están seleccionadas)
   const availableToAdd = allCategories.filter((c) => !safeSelected.includes(c));
 
   return (
@@ -118,7 +115,6 @@ const CategoryMultiSelect = ({
 export default function PartySupplyApp() {
   // --- ESTADOS ---
   const [inventory, setInventory] = useState(() => {
-    // Migración segura: asegurar que todos los items tengan 'categories' (array)
     const data = getInitialState('party_inventory', INITIAL_INVENTORY);
     return data.map((item) => ({
       ...item,
@@ -171,8 +167,13 @@ export default function PartySupplyApp() {
   const [isClosingTimeModalOpen, setIsClosingTimeModalOpen] = useState(false);
   const [isClosingCashModalOpen, setIsClosingCashModalOpen] = useState(false);
   const [selectedImage, setSelectedImage] = useState('');
-  const [saleSuccessModal, setSaleSuccessModal] = useState(null); // Para modal de venta exitosa
-  const [isAutoCloseAlertOpen, setIsAutoCloseAlertOpen] = useState(false); // Nuevo Modal Automático
+  const [saleSuccessModal, setSaleSuccessModal] = useState(null);
+  const [isAutoCloseAlertOpen, setIsAutoCloseAlertOpen] = useState(false);
+  
+  // NUEVO: Modal de eliminación de producto
+  const [isDeleteProductModalOpen, setIsDeleteProductModalOpen] = useState(false);
+  const [productToDelete, setProductToDelete] = useState(null);
+  const [deleteProductReason, setDeleteProductReason] = useState('');
 
   // Edición
   const [editingProduct, setEditingProduct] = useState(null);
@@ -192,7 +193,7 @@ export default function PartySupplyApp() {
     price: '',
     purchasePrice: '',
     stock: '',
-    categories: [], // Array vacío para inicio
+    categories: [],
     image: '',
   });
   const [tempOpeningBalance, setTempOpeningBalance] = useState('');
@@ -348,20 +349,17 @@ export default function PartySupplyApp() {
     }
   };
 
-  // --- CAJA: ABRIR / CERRAR (LOG MEJORADO) ---
+  // --- CAJA: ABRIR / CERRAR ---
   const toggleRegisterStatus = () => {
     if (isRegisterClosed) {
-      // ABRIR CAJA - Mostrar modal
       setTempOpeningBalance('');
       setTempClosingTime('21:00');
       setIsOpeningBalanceModalOpen(true);
     } else {
-      // CERRAR CAJA - Mostrar modal de confirmación
       setIsClosingCashModalOpen(true);
     }
   };
 
-  // Función unificada para ejecutar el cierre (Manual o Automático)
   const executeRegisterClose = (isAuto = false) => {
     setIsRegisterClosed(true);
     addLog(
@@ -377,10 +375,8 @@ export default function PartySupplyApp() {
       },
       isAuto ? 'Cierre Automático por Horario' : 'Cierre de jornada'
     );
-    // REINICIAR TRANSACCIONES
     setTransactions([]);
     setIsClosingCashModalOpen(false);
-    
     if (isAuto) {
       setIsAutoCloseAlertOpen(true);
     }
@@ -388,7 +384,6 @@ export default function PartySupplyApp() {
 
   const handleConfirmCloseCash = () => executeRegisterClose(false);
 
-  // EFECTO: Monitor de Cierre Automático
   useEffect(() => {
     if (!isRegisterClosed && closingTime) {
       const nowStr = currentTime.toLocaleTimeString('es-AR', {
@@ -396,14 +391,11 @@ export default function PartySupplyApp() {
         minute: '2-digit',
         hour12: false,
       });
-
-      // Compara hora actual (HH:mm) con hora de cierre
       if (nowStr === closingTime) {
         executeRegisterClose(true);
       }
     }
   }, [currentTime, closingTime, isRegisterClosed, salesCount, totalSales, openingBalance]);
-
 
   const handleSaveOpeningBalance = () => {
     const value = Number(tempOpeningBalance);
@@ -443,7 +435,6 @@ export default function PartySupplyApp() {
   };
 
   const handleDeleteCategoryFromView = (name) => {
-    // Verificar si algún producto tiene esta categoría en su array
     const inUse = inventory.some((p) =>
       Array.isArray(p.categories)
         ? p.categories.includes(name)
@@ -474,13 +465,11 @@ export default function PartySupplyApp() {
       price: Number(newItem.price) || 0,
       purchasePrice: Number(newItem.purchasePrice) || 0,
       stock: Number(newItem.stock) || 0,
-      // Usar la primera del array como principal para fallback
       category: newItem.categories[0],
       categories: newItem.categories,
       image: newItem.image || '',
     };
     setInventory([...inventory, item]);
-    // Log Completo del Objeto
     addLog('Alta de Producto', item, 'Producto Nuevo');
     setNewItem({
       title: '',
@@ -527,7 +516,6 @@ export default function PartySupplyApp() {
         new: Number(editingProduct.purchasePrice),
       };
 
-    // Detectar cambios en categorías (comparar arrays)
     const oldCats = Array.isArray(oldProduct.categories)
       ? oldProduct.categories
       : oldProduct.category
@@ -552,7 +540,6 @@ export default function PartySupplyApp() {
               price: Number(editingProduct.price) || 0,
               purchasePrice: Number(editingProduct.purchasePrice) || 0,
               stock: Number(editingProduct.stock) || 0,
-              // Asegurar que category (principal) tenga un valor válido del array
               category: newCats[0],
             }
           : p
@@ -573,14 +560,24 @@ export default function PartySupplyApp() {
     setEditReason('');
   };
 
-  const handleDeleteProduct = (id) => {
-    const p = inventory.find((x) => x.id === id);
-    const reason = window.prompt(
-      `¿Eliminar "${p?.title}"? Escribe el motivo (Opcional):`
-    );
-    if (reason !== null) {
-      setInventory(inventory.filter((x) => x.id !== id));
-      addLog('Baja Producto', p, reason || 'Sin motivo');
+  // --- MODIFICADO: Solicitud de eliminación (abre modal) ---
+  const handleDeleteProductRequest = (id) => {
+    const product = inventory.find(p => p.id === id);
+    if (product) {
+      setProductToDelete(product);
+      setDeleteProductReason('');
+      setIsDeleteProductModalOpen(true);
+    }
+  };
+
+  // --- NUEVO: Confirmación de eliminación ---
+  const confirmDeleteProduct = (e) => {
+    e.preventDefault();
+    if (productToDelete) {
+      setInventory(inventory.filter((x) => x.id !== productToDelete.id));
+      addLog('Baja Producto', productToDelete, deleteProductReason || 'Sin motivo');
+      setIsDeleteProductModalOpen(false);
+      setProductToDelete(null);
     }
   };
 
@@ -634,7 +631,7 @@ export default function PartySupplyApp() {
         return c ? { ...p, stock: p.stock - c.quantity } : p;
       })
     );
-    // Generar ID numérico secuencial (rango 1001-9999)
+    
     const validIds = transactions
       .map((t) => {
         if (typeof t.id === 'number') return t.id;
@@ -674,16 +671,12 @@ export default function PartySupplyApp() {
       },
       'Venta regular'
     );
-
-    // Mostrar modal de venta exitosa
     setSaleSuccessModal(tx);
-
     setCart([]);
     setInstallments(1);
     setPosSearch('');
   };
 
-  // Gestión Transacciones
   const handleDeleteTransaction = (tx) => {
     setTransactionToRefund(tx);
     setRefundReason('');
@@ -723,7 +716,6 @@ export default function PartySupplyApp() {
 
   const addTxItem = (product) => {
     if (!editingTransaction) return;
-    // Buscar por productId o title para verificar si ya existe
     const existingItemIndex = editingTransaction.items.findIndex(
       (i) => i.productId === product.id || (i.id === product.id && !i.productId)
     );
@@ -733,7 +725,6 @@ export default function PartySupplyApp() {
         idx === existingItemIndex ? { ...i, qty: (Number(i.qty) || 0) + 1 } : i
       );
     } else {
-      // Generar un uniqueId para el nuevo item
       const maxUniqueId = Math.max(
         0,
         ...editingTransaction.items.map((i) => i.uniqueId || 0)
@@ -847,7 +838,6 @@ export default function PartySupplyApp() {
     const originalTx = transactions.find((t) => t.id === editingTransaction.id);
     if (!originalTx) return;
 
-    // Logica Stock
     let tempInventory = [...inventory];
     tempInventory = tempInventory.map((prod) => {
       const originalItem = originalTx.items.find((i) => i.id === prod.id);
@@ -880,7 +870,6 @@ export default function PartySupplyApp() {
       )
     );
 
-    // CALCULAR DIFERENCIAS DE PRODUCTOS
     const productChanges = [];
     const allIds = new Set([
       ...originalTx.items.map((i) => i.id),
@@ -914,7 +903,6 @@ export default function PartySupplyApp() {
         new: editingTransaction.payment,
       };
 
-    // GUARDAR LOG CON DIFERENCIAS
     addLog(
       'Modificación Pedido',
       {
@@ -929,7 +917,6 @@ export default function PartySupplyApp() {
     setEditReason('');
   };
 
-  // --- RENDERIZADO LOGIN ---
   if (!currentUser) {
     if (loginStep === 'select') {
       return (
@@ -1081,7 +1068,6 @@ export default function PartySupplyApp() {
             </div>
           </div>
           <div className="flex items-center gap-4">
-            {/* Estado de Caja - Solo Dueño puede cambiar */}
             <div className="flex items-center gap-2">
               <button
                 onClick={
@@ -1109,7 +1095,6 @@ export default function PartySupplyApp() {
                   {isRegisterClosed ? 'CAJA CERRADA' : 'CAJA ABIERTA'}
                 </span>
               </button>
-              {/* Horario de cierre - visible cuando caja está abierta */}
               {!isRegisterClosed && closingTime && (
                 <div className="flex items-center gap-1 px-2 py-1 bg-amber-50 border border-amber-200 rounded text-amber-700">
                   <Clock size={12} />
@@ -1165,7 +1150,8 @@ export default function PartySupplyApp() {
                 setEditingProduct(prod);
                 setEditReason('');
               }}
-              handleDeleteProduct={handleDeleteProduct}
+              // MODIFICADO: Ahora pasa la función que abre el modal
+              handleDeleteProduct={handleDeleteProductRequest}
               setSelectedImage={setSelectedImage}
               setIsImageModalOpen={setIsImageModalOpen}
             />
@@ -1257,10 +1243,8 @@ export default function PartySupplyApp() {
                   setCategories(
                     categories.map((c) => (c === oldName ? newName : c))
                   );
-                  // Actualizar en todos los productos
                   setInventory(
                     inventory.map((p) => {
-                      // Actualizar array categories
                       let updatedCats = p.categories
                         ? [...p.categories]
                         : p.category
@@ -1271,7 +1255,6 @@ export default function PartySupplyApp() {
                           c === oldName ? newName : c
                         );
                       }
-                      // Actualizar principal si coincide
                       const updatedCat =
                         p.category === oldName ? newName : p.category;
 
@@ -1289,7 +1272,6 @@ export default function PartySupplyApp() {
                   });
                 }
               }}
-              // NUEVA PROP: Batch update para guardar cambios de CategoryManagerView en bloque
               onBatchUpdateProductCategory={(changes) => {
                 if (!changes || changes.length === 0) return;
 
@@ -1334,7 +1316,6 @@ export default function PartySupplyApp() {
                   details: logDetails,
                 });
               }}
-              // Mantengo la prop antigua por compatibilidad, pero ya no la usaremos directamente para updates inmediatos en la vista
               onUpdateProductCategory={() => {}}
             />
           )}
@@ -1342,6 +1323,68 @@ export default function PartySupplyApp() {
       </div>
 
       {/* --- MODALES --- */}
+      {/* ... [Otros modales se mantienen igual] ... */}
+      
+      {/* NUEVO: Modal de Confirmación de Eliminación de Producto */}
+      {isDeleteProductModalOpen && productToDelete && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="p-4 bg-red-50 border-b border-red-100 flex justify-between items-center">
+              <h3 className="font-bold text-red-800 flex items-center gap-2">
+                <Trash2 size={18} /> Eliminar Producto
+              </h3>
+              <button onClick={() => setIsDeleteProductModalOpen(false)}>
+                <X size={18} className="text-red-400 hover:text-red-600" />
+              </button>
+            </div>
+            <div className="p-6">
+              <div className="flex gap-4 items-start mb-4">
+                <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center shrink-0">
+                  <AlertTriangle size={24} className="text-red-600" />
+                </div>
+                <div>
+                  <p className="text-slate-700 font-bold text-lg leading-tight mb-1">
+                    ¿Estás seguro?
+                  </p>
+                  <p className="text-slate-500 text-sm">
+                    Vas a eliminar <span className="font-bold text-slate-800">"{productToDelete.title}"</span> del inventario.
+                  </p>
+                </div>
+              </div>
+              
+              <div className="mb-4">
+                 <label className="text-xs font-bold text-slate-400 uppercase block mb-1">
+                   Motivo (Opcional)
+                 </label>
+                 <input 
+                    type="text" 
+                    placeholder="Ej: Producto discontinuado"
+                    className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-red-500"
+                    value={deleteProductReason}
+                    onChange={(e) => setDeleteProductReason(e.target.value)}
+                    autoFocus
+                 />
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setIsDeleteProductModalOpen(false)}
+                  className="flex-1 py-2.5 rounded-lg font-bold border border-slate-300 text-slate-600 hover:bg-slate-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmDeleteProduct}
+                  className="flex-1 py-2.5 rounded-lg font-bold bg-red-600 text-white hover:bg-red-700 shadow-md transition-colors"
+                >
+                  Sí, Eliminar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {isOpeningBalanceModalOpen && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden">
@@ -1352,7 +1395,6 @@ export default function PartySupplyApp() {
               </p>
             </div>
             <div className="p-6 space-y-5">
-              {/* Monto Inicial */}
               <div>
                 <label className="text-xs font-bold text-slate-500 uppercase block mb-2">
                   Monto Inicial en Caja
@@ -1372,8 +1414,6 @@ export default function PartySupplyApp() {
                   />
                 </div>
               </div>
-
-              {/* Horario de Cierre */}
               <div>
                 <label className="text-xs font-bold text-slate-500 uppercase block mb-2">
                   Horario de Cierre Programado
@@ -1394,8 +1434,6 @@ export default function PartySupplyApp() {
                   La caja se deberá cerrar a esta hora
                 </p>
               </div>
-
-              {/* Resumen */}
               <div className="bg-slate-50 p-3 rounded-lg border">
                 <p className="text-xs text-slate-500 mb-2">
                   Resumen de apertura:
@@ -1413,8 +1451,6 @@ export default function PartySupplyApp() {
                   </span>
                 </div>
               </div>
-
-              {/* Botones */}
               <div className="flex gap-3">
                 <button
                   type="button"
@@ -1529,7 +1565,6 @@ export default function PartySupplyApp() {
                   <label className="text-xs font-bold text-slate-500 uppercase block mb-1">
                     Categoría(s)
                   </label>
-                  {/* Reemplazo del select simple por el MultiSelect */}
                   <CategoryMultiSelect
                     allCategories={categories}
                     selectedCategories={newItem.categories}
@@ -1752,10 +1787,8 @@ export default function PartySupplyApp() {
           </div>
         </div>
       )}
-      {/* ... (Resto de los modales y componentes igual que antes) ... */}
       {editingTransaction && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          {/* ... Mismo contenido del modal de transacción ... */}
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-5 flex flex-col max-h-[90vh]">
             <div className="flex justify-between items-center mb-4 pb-2 border-b">
               <div>
@@ -1876,7 +1909,6 @@ export default function PartySupplyApp() {
                 </div>
               </div>
 
-              {/* Aviso y cuotas para Crédito */}
               {editingTransaction.payment === 'Credito' && (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 bg-amber-50 text-amber-700 p-2 rounded border border-amber-200 text-xs">
@@ -2012,7 +2044,6 @@ export default function PartySupplyApp() {
             </div>
 
             <div className="p-5 space-y-4">
-              {/* Estadísticas */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
                   <p className="text-[10px] font-bold text-blue-500 uppercase">
@@ -2084,11 +2115,9 @@ export default function PartySupplyApp() {
         </div>
       )}
 
-      {/* Modal de Venta Exitosa */}
       {saleSuccessModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-300">
-            {/* Header con check verde */}
             <div className="bg-gradient-to-r from-green-500 to-emerald-500 p-6 text-center">
               <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-lg">
                 <CheckCircle size={40} className="text-green-500" />
@@ -2099,9 +2128,7 @@ export default function PartySupplyApp() {
               </p>
             </div>
 
-            {/* Detalles de la venta */}
             <div className="p-5 space-y-4">
-              {/* Número de pedido */}
               <div className="bg-slate-50 rounded-lg p-4 text-center">
                 <p className="text-xs text-slate-400 uppercase font-bold">
                   Número de Pedido
@@ -2111,7 +2138,6 @@ export default function PartySupplyApp() {
                 </p>
               </div>
 
-              {/* Info en grid */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-blue-50 p-3 rounded-lg">
                   <p className="text-[10px] font-bold text-blue-400 uppercase">
@@ -2135,7 +2161,6 @@ export default function PartySupplyApp() {
                 </div>
               </div>
 
-              {/* Lista de productos */}
               <div>
                 <p className="text-xs font-bold text-slate-400 uppercase mb-2 flex items-center gap-1">
                   <ShoppingBag size={12} /> Productos (
@@ -2164,7 +2189,6 @@ export default function PartySupplyApp() {
                 </div>
               </div>
 
-              {/* Total */}
               <div className="border-t pt-3">
                 {saleSuccessModal.payment === 'Credito' &&
                   saleSuccessModal.subtotal && (
@@ -2195,7 +2219,6 @@ export default function PartySupplyApp() {
               </div>
             </div>
 
-            {/* Footer */}
             <div className="p-4 bg-slate-50 border-t">
               <button
                 onClick={() => setSaleSuccessModal(null)}
@@ -2208,7 +2231,6 @@ export default function PartySupplyApp() {
         </div>
       )}
 
-      {/* --- NUEVO: MODAL DE CIERRE AUTOMÁTICO --- */}
       {isAutoCloseAlertOpen && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[70] p-4 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-300">

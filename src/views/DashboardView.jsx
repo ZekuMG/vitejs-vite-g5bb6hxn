@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   TrendingUp,
   Edit2,
@@ -11,14 +11,21 @@ import {
   GripVertical,
   Info,
   Percent,
-  Layers // Icono para Categorías
+  Layers,
+  Save,       // Icono Guardar
+  RotateCcw,  // Icono Restaurar
+  Lock        // Icono Bloqueo (visual)
 } from 'lucide-react';
 import { PAYMENT_METHODS } from '../data';
+
+// Órdenes por defecto (Constantes)
+const DEFAULT_BOTTOM_ORDER = ['chart', 'payments', 'topProducts', 'lowStock'];
+const DEFAULT_TOP_ORDER = ['sales', 'revenue', 'net', 'opening', 'average', 'placeholder'];
 
 export default function DashboardView({
   openingBalance,
   totalSales,
-  salesCount, // Props heredadas (se usarán como fallback o referencia)
+  salesCount,
   currentUser,
   setTempOpeningBalance,
   setIsOpeningBalanceModalOpen,
@@ -27,37 +34,76 @@ export default function DashboardView({
   inventory,
 }) {
   // =====================================================
-  // 1. ESTADOS
+  // 1. ESTADOS Y PERMISOS
   // =====================================================
   
+  // Verificación de Rol
+  const isAdmin = currentUser?.role === 'admin';
+
   // FILTRO GLOBAL UNIFICADO
-  const [globalFilter, setGlobalFilter] = useState('day'); // 'day', 'week', 'month'
+  const [globalFilter, setGlobalFilter] = useState('day'); 
 
   // Switch Productos / Categorías
-  const [rankingMode, setRankingMode] = useState('products'); // 'products', 'categories'
+  const [rankingMode, setRankingMode] = useState('products');
 
   // Estado para Tooltip del Gráfico
   const [hoveredChartIndex, setHoveredChartIndex] = useState(null);
 
-  // Drag & Drop: Widgets Inferiores
-  const [widgetOrder, setWidgetOrder] = useState([
-    'chart',
-    'payments',
-    'topProducts',
-    'lowStock'
-  ]);
-  const [draggedItem, setDraggedItem] = useState(null);
+  // --- GESTIÓN DE ORDEN Y PERSISTENCIA ---
 
-  // Drag & Drop: Tarjetas Superiores (KPIs)
-  const [topWidgetOrder, setTopWidgetOrder] = useState([
-    'sales',
-    'revenue',
-    'net',
-    'opening',
-    'average',
-    'placeholder'
-  ]);
+  // Inicializar estado leyendo de LocalStorage o usando Default
+  const [widgetOrder, setWidgetOrder] = useState(() => {
+    const saved = localStorage.getItem('party_dashboard_order_bottom');
+    return saved ? JSON.parse(saved) : DEFAULT_BOTTOM_ORDER;
+  });
+
+  const [topWidgetOrder, setTopWidgetOrder] = useState(() => {
+    const saved = localStorage.getItem('party_dashboard_order_top');
+    return saved ? JSON.parse(saved) : DEFAULT_TOP_ORDER;
+  });
+
+  // Estado para detectar cambios sin guardar
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  // Items arrastrados
+  const [draggedItem, setDraggedItem] = useState(null);
   const [draggedTopItem, setDraggedTopItem] = useState(null);
+
+  // Efecto para detectar si hay cambios respecto a lo guardado
+  useEffect(() => {
+    const savedBottom = localStorage.getItem('party_dashboard_order_bottom');
+    const savedTop = localStorage.getItem('party_dashboard_order_top');
+    
+    const currentBottomStr = JSON.stringify(widgetOrder);
+    const currentTopStr = JSON.stringify(topWidgetOrder);
+
+    const savedBottomStr = savedBottom || JSON.stringify(DEFAULT_BOTTOM_ORDER);
+    const savedTopStr = savedTop || JSON.stringify(DEFAULT_TOP_ORDER);
+
+    if (currentBottomStr !== savedBottomStr || currentTopStr !== savedTopStr) {
+        setHasUnsavedChanges(true);
+    } else {
+        setHasUnsavedChanges(false);
+    }
+  }, [widgetOrder, topWidgetOrder]);
+
+  // Funciones de Guardado y Restauración
+  const handleSaveLayout = () => {
+    localStorage.setItem('party_dashboard_order_bottom', JSON.stringify(widgetOrder));
+    localStorage.setItem('party_dashboard_order_top', JSON.stringify(topWidgetOrder));
+    setHasUnsavedChanges(false);
+    // Feedback visual simple (alert o toast custom)
+    // alert("Distribución guardada correctamente"); 
+  };
+
+  const handleRestoreLayout = () => {
+    // Restaurar a lo último guardado en LS, o al default si no hay nada
+    const savedBottom = localStorage.getItem('party_dashboard_order_bottom');
+    const savedTop = localStorage.getItem('party_dashboard_order_top');
+    
+    setWidgetOrder(savedBottom ? JSON.parse(savedBottom) : DEFAULT_BOTTOM_ORDER);
+    setTopWidgetOrder(savedTop ? JSON.parse(savedTop) : DEFAULT_TOP_ORDER);
+  };
 
   // =====================================================
   // 2. LOGICA CENTRALIZADA DE DATOS (CORE)
@@ -66,10 +112,8 @@ export default function DashboardView({
   const todayStr = useMemo(() => new Date().toLocaleDateString('es-AR'), []);
   const currentHour = new Date().getHours();
 
-  // Helper para normalizar fechas de strings a objetos comparables
   const parseDate = (dateStr) => {
     if (!dateStr) return null;
-    // Formato esperado: "dd/mm/yyyy, hh:mm:ss" o "dd/mm/yyyy"
     const cleanDate = dateStr.split(',')[0].trim(); 
     const [day, month, year] = cleanDate.split('/').map(Number);
     if (!day || !month || !year) return null;
@@ -87,12 +131,10 @@ export default function DashboardView({
     return product ? (Number(product.purchasePrice) || 0) : 0;
   };
 
-  // 2.1 OBTENCIÓN DE DATOS FILTRADOS (La fuente de la verdad para TODOS los widgets)
   const filteredData = useMemo(() => {
     const now = new Date();
     const oneDay = 24 * 60 * 60 * 1000;
     
-    // Función de filtrado según rango seleccionado
     const isInRange = (dateObj) => {
       if (!dateObj) return false;
       const dateStr = dateObj.toLocaleDateString('es-AR');
@@ -101,7 +143,6 @@ export default function DashboardView({
         return dateStr === todayStr;
       }
       if (globalFilter === 'week') {
-        // Últimos 7 días
         const diffTime = now - dateObj;
         const diffDays = Math.floor(diffTime / oneDay);
         return diffDays >= 0 && diffDays < 7;
@@ -115,7 +156,6 @@ export default function DashboardView({
     const validTransactions = [];
     const processedTxIds = new Set();
 
-    // A. Procesar Transacciones (Prioridad)
     (transactions || []).forEach(tx => {
       if (tx.status === 'voided') return;
       const txDate = parseDate(tx.date);
@@ -124,7 +164,7 @@ export default function DashboardView({
           source: 'tx',
           id: tx.id,
           date: txDate,
-          time: tx.time, // "HH:MM"
+          time: tx.time,
           total: Number(tx.total) || 0,
           payment: tx.payment,
           items: tx.items || []
@@ -133,14 +173,12 @@ export default function DashboardView({
       }
     });
 
-    // B. Procesar Logs (Solo si no existen en transacciones para evitar duplicados)
     (dailyLogs || []).forEach(log => {
       if (isVentaLog(log) && log.details) {
         const txId = log.details.transactionId;
         if (!processedTxIds.has(txId)) {
           const logDate = parseDate(log.date);
           if (isInRange(logDate)) {
-            // Intentar extraer hora del timestamp o del date string
             let timeStr = "00:00";
             if (log.timestamp) timeStr = log.timestamp;
             
@@ -165,7 +203,6 @@ export default function DashboardView({
   // 3. CÁLCULO DE ESTADÍSTICAS DERIVADAS
   // =====================================================
 
-  // 3.1 KPIs (Cards Superiores)
   const kpiStats = useMemo(() => {
     let gross = 0;
     let net = 0;
@@ -188,14 +225,12 @@ export default function DashboardView({
 
   const averageTicket = kpiStats.count > 0 ? kpiStats.gross / kpiStats.count : 0;
 
-  // 3.2 DATOS PARA EL GRÁFICO (Chart)
   const chartData = useMemo(() => {
-    // A. Gráfico por Horas (Solo vista DIARIA)
     if (globalFilter === 'day') {
       const ranges = [
         { label: '9-12', start: 9, end: 12, sales: 0, count: 0 },
         { label: '12-14', start: 12, end: 14, sales: 0, count: 0 },
-        { label: '14-17', start: 14, end: 17, sales: 0, count: 0 }, // Agregado rango siesta
+        { label: '14-17', start: 14, end: 17, sales: 0, count: 0 },
         { label: '17-21', start: 17, end: 21, sales: 0, count: 0 },
         { label: '21+', start: 21, end: 24, sales: 0, count: 0 },
       ];
@@ -213,19 +248,10 @@ export default function DashboardView({
       return ranges.map(r => ({ ...r, isCurrent: currentHour >= r.start && currentHour < r.end }));
     }
 
-    // B. Gráfico por Días (Vista SEMANAL o MENSUAL)
-    // Generar etiquetas dinámicas
     const daysMap = new Map();
-    const result = [];
     const now = new Date();
+    const daysToShow = globalFilter === 'week' ? 7 : 30;
     
-    // Si es semana, mostramos últimos 7 días. Si es mes, agrupamos por semanas o mostramos días clave.
-    // Para simplificar y mantener el estilo visual, usaremos lógica de días para ambos por ahora, 
-    // pero agrupando si son muchos datos en el futuro.
-    
-    const daysToShow = globalFilter === 'week' ? 7 : 30; // 30 días aprox para mes
-    
-    // Inicializar estructura
     for (let i = daysToShow - 1; i >= 0; i--) {
       const d = new Date(now);
       d.setDate(d.getDate() - i);
@@ -243,7 +269,6 @@ export default function DashboardView({
       });
     }
 
-    // Llenar datos
     filteredData.forEach(tx => {
       const key = tx.date.toLocaleDateString('es-AR');
       if (daysMap.has(key)) {
@@ -253,11 +278,9 @@ export default function DashboardView({
       }
     });
 
-    // Convertir a array. Si es mes, comprimir en 4 semanas para que entre en el gráfico
     const dayArray = Array.from(daysMap.values());
     
     if (globalFilter === 'month') {
-        // Agrupar en 4 semanas
         const weeks = [
             { label: 'Sem 1', sales: 0, count: 0, isCurrent: false },
             { label: 'Sem 2', sales: 0, count: 0, isCurrent: false },
@@ -265,7 +288,6 @@ export default function DashboardView({
             { label: 'Sem 4+', sales: 0, count: 0, isCurrent: true },
         ];
         
-        // Distribuir equitativamente (aprox)
         dayArray.forEach((d, idx) => {
             const weekIdx = Math.min(Math.floor(idx / 7), 3);
             weeks[weekIdx].sales += d.sales;
@@ -282,7 +304,6 @@ export default function DashboardView({
     return max > 0 ? max : 1;
   }, [chartData]);
 
-  // 3.3 MÉTODOS DE PAGO (Sincronizado)
   const paymentStats = useMemo(() => {
     return PAYMENT_METHODS.map(method => {
       const total = filteredData
@@ -292,9 +313,8 @@ export default function DashboardView({
     });
   }, [filteredData]);
 
-  // 3.4 RANKING (Productos o Categorías)
   const rankingStats = useMemo(() => {
-    const statsMap = {}; // { 'Nombre': { qty, revenue } }
+    const statsMap = {}; 
 
     filteredData.forEach(tx => {
       tx.items.forEach(item => {
@@ -306,33 +326,49 @@ export default function DashboardView({
             if (!statsMap[key]) statsMap[key] = { name: key, qty: 0, revenue: 0 };
             statsMap[key].qty += qty;
             statsMap[key].revenue += revenue;
-        } else {
-            // Categories logic
-            // Manejar array o string simple
-            let cats = [];
-            if (Array.isArray(item.categories) && item.categories.length > 0) {
-                cats = item.categories;
-            } else if (item.category) {
-                cats = [item.category];
-            } else {
-                cats = ['Sin Categoría'];
-            }
+          } else {
+              // LÓGICA CORREGIDA: Priorizar datos del inventario actual
+              let cats = [];
+              
+              // 1. Buscar producto actualizado en inventario (para corregir bugs históricos)
+              const liveProduct = inventory ? inventory.find(p => p.id === item.id) : null;
+              
+              if (liveProduct) {
+                  if (Array.isArray(liveProduct.categories) && liveProduct.categories.length > 0) {
+                      cats = liveProduct.categories;
+                  } else if (liveProduct.category) {
+                      cats = [liveProduct.category];
+                  }
+              }
 
-            cats.forEach(cat => {
-                if (!statsMap[cat]) statsMap[cat] = { name: cat, qty: 0, revenue: 0 };
-                statsMap[cat].qty += qty;
-                statsMap[cat].revenue += revenue;
-            });
-        }
+              // 2. Si no se encontró (producto borrado), usar dato histórico de la venta
+              if (cats.length === 0) {
+                  if (Array.isArray(item.categories) && item.categories.length > 0) {
+                      cats = item.categories;
+                  } else if (item.category) {
+                      cats = [item.category];
+                  }
+              }
+
+              // 3. Fallback final
+              if (cats.length === 0) {
+                  cats = ['Sin Categoría'];
+              }
+
+              cats.forEach(cat => {
+                  if (!statsMap[cat]) statsMap[cat] = { name: cat, qty: 0, revenue: 0 };
+                  statsMap[cat].qty += qty;
+                  statsMap[cat].revenue += revenue;
+              });
+          }
+        });
       });
-    });
 
     return Object.values(statsMap)
-        .sort((a, b) => b.qty - a.qty) // Ordenar por cantidad vendida
-        .slice(0, 5); // Top 5
-  }, [filteredData, rankingMode]);
+        .sort((a, b) => b.qty - a.qty)
+        .slice(0, 5);
+  }, [filteredData, rankingMode, inventory]); // Agregado inventory a dependencias
 
-  // 3.5 STOCK BAJO (Independiente del filtro temporal, depende del inventario actual)
   const lowStockProducts = useMemo(() => {
     if (!inventory) return [];
     return inventory.filter((p) => p.stock < 10).sort((a,b) => a.stock - b.stock).slice(0, 5);
@@ -376,8 +412,34 @@ export default function DashboardView({
     </div>
   );
 
+  // --- BOTONERA DE GESTIÓN DE LAYOUT (Solo Admin) ---
+  const LayoutManagerControls = () => {
+    if (!isAdmin || !hasUnsavedChanges) return null;
+
+    return (
+      <div className="flex gap-2 animate-in fade-in slide-in-from-right-2 duration-200">
+          {/* Botón Restaurar: Blanco/Gris */}
+          <button
+              onClick={handleRestoreLayout}
+              className="p-2 rounded-lg bg-white border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700 shadow-sm transition-all"
+              title="Deshacer cambios (Restaurar)"
+          >
+              <RotateCcw size={16} />
+          </button>
+
+          {/* Botón Guardar: Azul Sólido */}
+          <button
+              onClick={handleSaveLayout}
+              className="p-2 rounded-lg bg-blue-600 text-white border border-blue-600 shadow-md hover:bg-blue-700 transition-all"
+              title="Guardar nueva distribución"
+          >
+              <Save size={16} />
+          </button>
+      </div>
+  );
+};
+
   const renderTopWidget = (key) => {
-    // Título dinámico
     const getPeriodText = (prefix) => {
         if (globalFilter === 'day') return `${prefix} Diario`;
         if (globalFilter === 'week') return `${prefix} Semanal`;
@@ -479,7 +541,6 @@ export default function DashboardView({
             </div>
             
             <div className="flex">
-              {/* Eje Y */}
               <div className="flex flex-col justify-between pr-2 py-1 text-right" style={{ height: '180px', minWidth: '50px' }}>
                 <span className="text-[9px] text-slate-400">${maxSales.toLocaleString()}</span>
                 <span className="text-[9px] text-slate-400">${Math.round(maxSales/2).toLocaleString()}</span>
@@ -487,14 +548,12 @@ export default function DashboardView({
               </div>
               
               <div className="flex-1 relative">
-                {/* Grid Lines */}
                 <div className="absolute inset-0 flex flex-col justify-between pointer-events-none" style={{ height: '180px' }}>
                   <div className="border-t border-slate-100"></div>
                   <div className="border-t border-dashed border-slate-100"></div>
                   <div className="border-t border-slate-200"></div>
                 </div>
                 
-                {/* Empty State */}
                 {!chartData.some(d => d.sales > 0) && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-white/60 backdrop-blur-[1px]">
                     <span className="text-xs font-bold text-slate-400 uppercase tracking-wide bg-white px-2 py-1 rounded border">
@@ -503,7 +562,6 @@ export default function DashboardView({
                   </div>
                 )}
 
-                {/* Bars */}
                 <div className="flex items-end justify-around gap-2 relative" style={{ height: '180px' }}>
                   {chartData.map((item, idx) => {
                     const heightPercent = maxSales > 0 ? (item.sales / maxSales) * 100 : 0;
@@ -516,7 +574,6 @@ export default function DashboardView({
                         onMouseEnter={() => setHoveredChartIndex(idx)}
                         onMouseLeave={() => setHoveredChartIndex(null)}
                       >
-                        {/* Tooltip */}
                         <div 
                           className={`absolute -top-10 left-1/2 -translate-x-1/2 transition-all duration-200 bg-slate-800 text-white text-[10px] px-2 py-1 rounded whitespace-nowrap z-30 shadow-lg pointer-events-none ${isHovered ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}
                         >
@@ -524,7 +581,6 @@ export default function DashboardView({
                           <p className="text-slate-300">{item.count} ops</p>
                         </div>
                         
-                        {/* Bar */}
                         <div 
                             className={`w-full max-w-[40px] rounded-t transition-all duration-500 ${
                               item.isCurrent ? 'bg-fuchsia-500' : item.sales > 0 ? 'bg-fuchsia-300' : 'bg-slate-100'
@@ -536,7 +592,6 @@ export default function DashboardView({
                   })}
                 </div>
                 
-                {/* Eje X Labels */}
                 <div className="flex justify-around gap-2 mt-2 pt-2 border-t border-slate-200">
                   {chartData.map((item, idx) => (
                     <div key={idx} className="flex-1 text-center">
@@ -558,7 +613,7 @@ export default function DashboardView({
             </h3>
             <div className="space-y-3">
               {paymentStats.map((m) => {
-                const totalFiltered = kpiStats.gross; // Total filtrado actual
+                const totalFiltered = kpiStats.gross;
                 const percent = totalFiltered > 0 ? (m.total / totalFiltered) * 100 : 0;
                 
                 return (
@@ -597,7 +652,6 @@ export default function DashboardView({
                 Más Vendidos
               </h3>
               
-              {/* SWITCH PRODUCTOS / CATEGORIAS */}
               <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
                  <button 
                     onClick={() => setRankingMode('products')}
@@ -686,29 +740,35 @@ export default function DashboardView({
   // =====================================================
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-10">
-      {/* HEADER & SWITCH GLOBAL */}
-      <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+      {/* HEADER & CONTROLES */}
+      <div className="flex flex-col lg:flex-row justify-between items-center gap-4">
         <div>
             <h2 className="text-2xl font-bold text-slate-800">Panel de Control</h2>
             <p className="text-xs text-slate-400">Resumen de operaciones en tiempo real</p>
         </div>
-        <GlobalTimeSwitch />
+        
+        {/* Controles Agrupados */}
+        <div className="flex flex-wrap items-center gap-3">
+             <LayoutManagerControls />
+             <div className="h-6 w-px bg-slate-200 hidden sm:block"></div>
+             <GlobalTimeSwitch />
+        </div>
       </div>
 
-      {/* Tarjetas principales (KPIs) - Draggable */}
+      {/* Tarjetas principales (KPIs) - Draggable condicional */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3">
         {topWidgetOrder.map((widgetKey, index) => (
           <div
             key={widgetKey}
-            draggable
+            draggable={isAdmin} // Solo admin puede arrastrar
             onDragStart={(e) => {
+                if (!isAdmin) return;
                 setDraggedTopItem(widgetKey);
                 e.dataTransfer.effectAllowed = 'move';
             }}
             onDragOver={(e) => {
                 e.preventDefault();
-                if (draggedTopItem === widgetKey) return;
-                // Simple reorder logic on hover
+                if (!isAdmin || draggedTopItem === widgetKey) return;
                 const currentIdx = topWidgetOrder.indexOf(draggedTopItem);
                 if (currentIdx !== -1 && currentIdx !== index) {
                      const newOrder = [...topWidgetOrder];
@@ -726,28 +786,32 @@ export default function DashboardView({
             }`}
           >
              <div className="group relative h-full">
-                <div className="absolute top-1 right-1 z-20 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 bg-white/80 p-1 rounded backdrop-blur-sm">
-                  <GripVertical size={14} />
-                </div>
+                {/* Drag Handle Top - Solo visible para admin en hover */}
+                {isAdmin && (
+                    <div className="absolute top-1 right-1 z-20 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 bg-white/80 p-1 rounded backdrop-blur-sm">
+                        <GripVertical size={14} />
+                    </div>
+                )}
                 {renderTopWidget(widgetKey)}
              </div>
           </div>
         ))}
       </div>
 
-      {/* Gráficos y Widgets Inferiores - Draggable */}
+      {/* Gráficos y Widgets Inferiores - Draggable condicional */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {widgetOrder.map((widgetKey, index) => (
           <div
             key={widgetKey}
-            draggable
+            draggable={isAdmin} // Solo admin puede arrastrar
             onDragStart={(e) => {
+                if (!isAdmin) return;
                 setDraggedItem(widgetKey);
                 e.dataTransfer.effectAllowed = 'move';
             }}
             onDragOver={(e) => {
                 e.preventDefault();
-                if (draggedItem === widgetKey) return;
+                if (!isAdmin || draggedItem === widgetKey) return;
                  const currentIdx = widgetOrder.indexOf(draggedItem);
                  if (currentIdx !== -1 && currentIdx !== index) {
                      const newOrder = [...widgetOrder];
@@ -765,9 +829,17 @@ export default function DashboardView({
             }`}
           >
             <div className="group relative h-full">
-              <div className="absolute top-4 right-4 z-20 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 bg-white/80 p-1 rounded backdrop-blur-sm">
-                <GripVertical size={16} />
-              </div>
+              {/* Drag Handle Bottom - Solo visible para admin */}
+              {isAdmin ? (
+                <div className="absolute top-4 right-4 z-20 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 bg-white/80 p-1 rounded backdrop-blur-sm">
+                    <GripVertical size={16} />
+                </div>
+              ) : (
+                // Indicador visual opcional para vendedor (bloqueo)
+                <div className="absolute top-4 right-4 z-20 opacity-0 group-hover:opacity-50 transition-opacity text-slate-200 pointer-events-none">
+                    <Lock size={16} />
+                </div>
+              )}
               {renderWidget(widgetKey)}
             </div>
           </div>

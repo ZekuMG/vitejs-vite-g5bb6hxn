@@ -4,13 +4,11 @@ import {
   ShoppingCart,
   Trash2,
   CreditCard,
-  AlertCircle,
   Grid,
   List,
   Tag,
-  Maximize,
-  Minimize,
-  Monitor,
+  Grid3x3,
+  LayoutGrid,
 } from 'lucide-react';
 import ProductImage from '../components/ProductImage';
 import { PAYMENT_METHODS } from '../data';
@@ -32,7 +30,7 @@ export default function POSView({
   setPosSearch,
 }) {
   const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'list'
-  const [gridSize, setGridSize] = useState('medium'); // 'small' | 'medium' | 'large'
+  const [gridSize, setGridSize] = useState('small'); // 'small' | 'normal'
   const [categoryFilter, setCategoryFilter] = useState('');
 
   const subtotal = cart.reduce(
@@ -88,12 +86,12 @@ export default function POSView({
   // --- LÓGICA DE GRILLA DINÁMICA ---
   const getGridClasses = () => {
     switch (gridSize) {
-      case 'small': // 8 columnas aprox
-        return 'grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2';
-      case 'medium': // 6 columnas aprox
+      case 'small': 
+        // Chico = 6 columnas
         return 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3';
-      case 'large': // 4 columnas aprox
-        return 'grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4';
+      case 'normal': 
+        // Normal = 5 columnas
+        return 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3';
       default:
         return 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3';
     }
@@ -143,45 +141,34 @@ export default function POSView({
 
           {/* Selector de Tamaño (Solo visible en modo Grid) */}
           {viewMode === 'grid' && (
-            <div className="flex bg-slate-100 rounded p-0.5 border border-slate-200">
+            <div className="flex bg-slate-100 rounded p-0.5 border border-slate-200 gap-0.5">
               <button
                 onClick={() => setGridSize('small')}
-                className={`px-2 py-1 text-[10px] font-bold rounded transition-colors ${
+                className={`p-1.5 rounded transition-colors ${
                   gridSize === 'small'
                     ? 'bg-white shadow text-fuchsia-700'
-                    : 'text-slate-500 hover:text-slate-700'
+                    : 'text-slate-400 hover:text-slate-600'
                 }`}
-                title="Chico (8 columnas)"
+                title="Chico"
               >
-                Chico
+                <Grid3x3 size={14} />
               </button>
               <button
-                onClick={() => setGridSize('medium')}
-                className={`px-2 py-1 text-[10px] font-bold rounded transition-colors ${
-                  gridSize === 'medium'
+                onClick={() => setGridSize('normal')}
+                className={`p-1.5 rounded transition-colors ${
+                  gridSize === 'normal'
                     ? 'bg-white shadow text-fuchsia-700'
-                    : 'text-slate-500 hover:text-slate-700'
+                    : 'text-slate-400 hover:text-slate-600'
                 }`}
-                title="Mediano (6 columnas)"
+                title="Normal"
               >
-                Mediano
-              </button>
-              <button
-                onClick={() => setGridSize('large')}
-                className={`px-2 py-1 text-[10px] font-bold rounded transition-colors ${
-                  gridSize === 'large'
-                    ? 'bg-white shadow text-fuchsia-700'
-                    : 'text-slate-500 hover:text-slate-700'
-                }`}
-                title="Grande (4 columnas)"
-              >
-                Grande
+                <LayoutGrid size={14} />
               </button>
             </div>
           )}
 
           {/* Botones de vista */}
-          <div className="flex bg-slate-100 rounded p-0.5 border border-slate-200 ml-auto">
+          <div className="flex bg-slate-100 rounded p-0.5 border border-slate-200 ml-auto gap-0.5">
             <button
               onClick={() => setViewMode('grid')}
               className={`p-1.5 rounded transition ${
@@ -237,7 +224,7 @@ export default function POSView({
                       </span>
                     )}
 
-                    <div className="aspect-square rounded overflow-hidden mb-2 relative bg-slate-100">
+                    <div className="aspect-square rounded overflow-hidden mb-2 relative bg-slate-100 w-full">
                       <ProductImage
                         item={item}
                         className="w-full h-full object-contain"
@@ -249,46 +236,44 @@ export default function POSView({
                       )}
                     </div>
 
-                    {/* Título y precio condicional al tamaño */}
-                    <div className="mt-auto">
-                      <h4
-                        className={`font-bold text-slate-800 leading-tight mb-1 line-clamp-2 ${
-                          gridSize === 'small' ? 'text-[9px]' : 'text-[11px]'
+                    {/* MODIFICACIÓN CLAVE: Título separado, sin contenedor mt-auto que lo agrupe */}
+                    <h4
+                      className={`font-bold text-slate-800 leading-tight mb-1 line-clamp-2 ${
+                        gridSize === 'small' ? 'text-[10px]' : 'text-[11px]'
+                      }`}
+                    >
+                      {item.title}
+                    </h4>
+
+                    {/* Precio y Stock empujados al fondo individualmente */}
+                    <div className="mt-auto flex justify-between items-end w-full">
+                      <span
+                        className={`font-bold text-fuchsia-700 ${
+                          gridSize === 'small' ? 'text-xs' : 'text-sm'
                         }`}
                       >
-                        {item.title}
-                      </h4>
-                      <div className="flex justify-between items-end">
-                        <span
-                          className={`font-bold text-fuchsia-700 ${
-                            gridSize === 'small' ? 'text-xs' : 'text-sm'
-                          }`}
-                        >
-                          ${item.price.toLocaleString()}
-                        </span>
-                        {gridSize !== 'small' && (
-                          <span
-                            className={`text-[9px] px-1 py-0.5 rounded font-bold ${
-                              availableStock <= 0
-                                ? 'bg-slate-200 text-slate-500'
-                                : availableStock < 5
-                                ? 'bg-red-100 text-red-700'
-                                : availableStock < 10
-                                ? 'bg-amber-100 text-amber-700'
-                                : 'bg-green-100 text-green-700'
-                            }`}
-                          >
-                            {availableStock}
-                          </span>
-                        )}
-                      </div>
+                        ${item.price.toLocaleString()}
+                      </span>
+                      <span
+                        className={`${gridSize === 'small' ? 'text-[10px] px-1.5 py-0.5' : 'text-[9px] px-1 py-0.5'} rounded font-bold ${
+                          availableStock <= 0
+                            ? 'bg-slate-200 text-slate-500'
+                            : availableStock < 5
+                            ? 'bg-red-100 text-red-700'
+                            : availableStock < 10
+                            ? 'bg-amber-100 text-amber-700'
+                            : 'bg-green-100 text-green-700'
+                        }`}
+                      >
+                        {availableStock}
+                      </span>
                     </div>
                   </button>
                 );
               })}
             </div>
           ) : (
-            /* VISTA LISTA COMPACTA */
+            /* VISTA LISTA COMPACTA (Sin cambios) */
             <div className="space-y-1">
               {filteredInventory.map((item) => {
                 const cartQty = getCartQty(item.id);

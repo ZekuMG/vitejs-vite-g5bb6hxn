@@ -93,17 +93,28 @@ export default function HistoryView({
   }, []);
 
   // =====================================================
-  // TRANSACCIONES HISTÓRICAS
+  // TRANSACCIONES HISTÓRICAS (Filtradas para evitar duplicados)
   // =====================================================
   const historicTransactions = useMemo(() => {
     const txList = [];
+    // Crear un Set con los IDs que ya están activos para no repetirlos
+    const activeIds = new Set((transactions || []).map(t => t.id));
+
     (dailyLogs || []).forEach((log) => {
       if (isVentaLog(log) && log.details) {
+        const txId = log.details.transactionId || log.id;
+        
+        // MODIFICADO: Si el ID ya existe en 'transactions' (activo), lo ignoramos aquí
+        // para que se muestre la versión editable (active) y no la histórica (readonly).
+        if (activeIds.has(txId)) return;
+
         const logDate = normalizeDate(log.date);
-        const isToday = logDate && logDate.str === todayStr;
-        if (logDate && !isToday) {
+        
+        // Ya no filtramos estrictamente por "hoy", sino por "existencia en activos".
+        // Esto permite que el historial muestre lo que NO está cargado en memoria activa.
+        if (logDate) {
           txList.push({
-            id: log.details.transactionId || log.id,
+            id: txId,
             date: log.date,
             timestamp: log.timestamp,
             fullDate: `${log.date}, ${log.timestamp || '00:00'}:00`,
@@ -113,26 +124,24 @@ export default function HistoryView({
             installments: log.details.installments || 0,
             total: getVentaTotal(log.details),
             status: 'completed',
-            isHistoric: true,
-            sortDate: logDate
-              ? new Date(logDate.year, logDate.month - 1, logDate.day)
-              : new Date(0),
+            isHistoric: true, // Esto oculta los botones
+            sortDate: new Date(logDate.year, logDate.month - 1, logDate.day),
           });
         }
       }
     });
     return txList;
-  }, [dailyLogs, todayStr]);
+  }, [dailyLogs, transactions]); // Agregamos transactions a dependencias
 
   // =====================================================
-  // TRANSACCIONES DEL DÍA
+  // TRANSACCIONES ACTIVAS (Del día o cargadas en memoria)
   // =====================================================
-  const todayTransactions = useMemo(() => {
+  const activeTransactions = useMemo(() => {
     return (transactions || []).map((tx) => {
       const logDate = normalizeDate(tx.date);
       return {
         ...tx,
-        isHistoric: false,
+        isHistoric: false, // CLAVE: Habilita los botones de edición
         sortDate: logDate
           ? new Date(logDate.year, logDate.month - 1, logDate.day)
           : new Date(),
@@ -147,11 +156,20 @@ export default function HistoryView({
     let txList = [];
 
     if (viewMode === 'today') {
-      txList = todayTransactions;
+      // Filtro simple por fecha de hoy
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      txList = [...activeTransactions, ...historicTransactions].filter(tx => {
+         const txDate = new Date(tx.sortDate);
+         txDate.setHours(0,0,0,0);
+         return txDate.getTime() === today.getTime();
+      });
     } else if (viewMode === 'history') {
+      // Todo lo histórico (no editable)
       txList = historicTransactions;
     } else {
-      txList = [...todayTransactions, ...historicTransactions];
+      // Combinar Activas + Históricas
+      txList = [...activeTransactions, ...historicTransactions];
     }
 
     if (filterDateStart) {
@@ -214,7 +232,7 @@ export default function HistoryView({
     return txList;
   }, [
     viewMode,
-    todayTransactions,
+    activeTransactions,
     historicTransactions,
     filterDateStart,
     filterDateEnd,
@@ -261,7 +279,7 @@ export default function HistoryView({
     searchQuery;
 
   // =====================================================
-  // GENERADOR DE PEDIDOS
+  // GENERADOR DE PEDIDOS (REFACTORIZADO - SIEMPRE ACTIVO)
   // =====================================================
   const generateRandomTransactions = () => {
     const { count, dateStart, dateEnd, timeStart, timeEnd } = generatorConfig;
@@ -283,6 +301,7 @@ export default function HistoryView({
     const endHour = parseInt(timeEnd, 10) || 21;
 
     const newLogs = [];
+    const newActiveTransactions = [];
 
     for (let i = 0; i < count; i++) {
       const randomTime =
@@ -297,10 +316,7 @@ export default function HistoryView({
 
       const randomMinute = Math.floor(Math.random() * 60);
 
-      const day = randomDate.getDate().toString().padStart(2, '0');
-      const month = (randomDate.getMonth() + 1).toString().padStart(2, '0');
-      const year = randomDate.getFullYear();
-      const dateStr = `${day}/${month}/${year}`;
+      const dateStr = randomDate.toLocaleDateString('es-AR');
       const timeStr = `${randomHour.toString().padStart(2, '0')}:${randomMinute
         .toString()
         .padStart(2, '0')}`;
@@ -320,10 +336,15 @@ export default function HistoryView({
         if (!usedProducts.has(product.id)) {
           usedProducts.add(product.id);
           const qty = 1 + Math.floor(Math.random() * 4);
+          
           selectedProducts.push({
+            id: product.id,
+            productId: product.id,
             title: product.title,
             price: product.price,
             qty: qty,
+            categories: product.categories || [],
+            category: product.category || '',
           });
         }
       }
@@ -336,8 +357,24 @@ export default function HistoryView({
       );
       const payment = payments[Math.floor(Math.random() * payments.length)];
       const user = users[Math.floor(Math.random() * users.length)];
-      const txId = 1001 + i + Math.floor(Math.random() * 100);
+      const txId = 1001 + i + Math.floor(Math.random() * 9000); 
+      const installments = payment === 'Credito' ? Math.floor(Math.random() * 6) + 1 : 0;
 
+      // MODIFICADO: Siempre creamos una transacción ACTIVA, sin importar la fecha
+      newActiveTransactions.push({
+          id: txId,
+          date: dateStr,
+          time: timeStr,
+          user: user,
+          total: total,
+          subtotal: total,
+          payment: payment,
+          installments: installments,
+          items: selectedProducts,
+          status: 'completed',
+      });
+
+      // También creamos el log para consistencia
       newLogs.push({
         id: Date.now() + i + Math.random(),
         timestamp: timeStr,
@@ -349,8 +386,7 @@ export default function HistoryView({
           items: selectedProducts,
           total: total,
           payment: payment,
-          installments:
-            payment === 'Credito' ? Math.floor(Math.random() * 6) + 1 : 0,
+          installments: installments,
         },
         reason: 'Venta generada para pruebas',
       });
@@ -359,9 +395,14 @@ export default function HistoryView({
     if (newLogs.length > 0 && setDailyLogs) {
       setDailyLogs((prev) => [...newLogs, ...(prev || [])]);
     }
+    
+    // Inyectamos todo en el estado activo para que sea editable
+    if (newActiveTransactions.length > 0 && setTransactions) {
+        setTransactions((prev) => [...newActiveTransactions, ...(prev || [])]);
+    }
 
     setShowGeneratorModal(false);
-    alert(`✅ Se generaron ${newLogs.length} pedidos exitosamente`);
+    alert(`✅ Se generaron ${newActiveTransactions.length} pedidos editables.`);
   };
 
   const clearAllTransactions = () => {
@@ -409,7 +450,7 @@ export default function HistoryView({
           )}
         </div>
 
-        {/* Fila 2: Filtros Compactos (Todo en una línea horizontal con scroll si hace falta) */}
+        {/* Fila 2: Filtros Compactos */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
           {/* Buscador */}
           <div className="relative min-w-[140px]">
@@ -533,7 +574,7 @@ export default function HistoryView({
           <tbody className="divide-y">
             {filteredTransactions.map((tx, index) => {
               const isVoided = tx.status === 'voided';
-              const isHistoric = tx.isHistoric;
+              const isHistoric = tx.isHistoric; // Ahora será false si viene de activeTransactions
 
               return (
                 <tr
@@ -641,6 +682,7 @@ export default function HistoryView({
                         >
                           <Eye size={14} />
                         </button>
+                        {/* BOTONES DE ACCIÓN: Se muestran si no es histórico O si es activeTransactions (isHistoric=false) */}
                         {!isHistoric && !isVoided && (
                           <button
                             onClick={() => onEditTransaction(tx)}
