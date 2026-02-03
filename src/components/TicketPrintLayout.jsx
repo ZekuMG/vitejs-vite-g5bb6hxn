@@ -3,7 +3,7 @@ import React from 'react';
 export const TicketPrintLayout = ({ transaction }) => {
   if (!transaction) return null;
 
-  // Formatear ID a 6 dígitos (Ej: 1 -> 000001)
+  // Formatear ID a 6 dígitos
   const formattedId = String(transaction.id).padStart(6, '0');
 
   // Calcular valores
@@ -17,76 +17,72 @@ export const TicketPrintLayout = ({ transaction }) => {
           .hidden-on-screen { display: none; }
         }
         @media print {
-          /* 1. RESETEO TOTAL PARA EVITAR MÁRGENES DEL NAVEGADOR */
+          /* 1. ELIMINAR MÁRGENES DEL NAVEGADOR */
           @page {
-            margin: 0;
-            size: auto; /* O size: 58mm auto; si el navegador lo permite */
+            margin: 0; /* Esto quita las "barandas blancas" */
+            size: auto; 
           }
           
           body {
             margin: 0;
             padding: 0;
-            /* Forzar blanco y negro puro para evitar grises/borrosos */
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
+            background-color: white;
           }
 
-          /* 2. CONFIGURACIÓN EXACTA DE FUENTE */
+          /* 2. CONFIGURACIÓN DEL CONTENEDOR */
           #printable-ticket {
             visibility: visible;
             position: absolute;
             left: 0;
             top: 0;
             
-            /* Ancho seguro para 58mm (generalmente 48mm imprimibles) */
+            /* ANCHO EFECTIVO: El papel es de 58mm, pero la impresora 
+               físicamente no imprime en los bordes extremos. 
+               48mm es el estándar seguro para que no se corte el texto.
+               Si ves que sobra espacio, podés subir a 50mm o 52mm.
+            */
             width: 48mm; 
-            margin-left: 1mm; /* Pequeño margen izquierdo */
             
-            /* ARIAL, NEGRITA, TAMAÑO PEQUEÑO */
+            /* Padding mínimo para que no se pegue al borde del papel */
+            padding-left: 1mm;
+            padding-right: 1mm;
+            
+            /* FUENTE NÍTIDA Y GRANDE */
             font-family: Arial, Helvetica, sans-serif !important;
-            font-weight: 900 !important; /* Negrita extra fuerte */
-            font-size: 10px !important; /* Equivalente legible a tamaño 8 en ticket */
-            line-height: 1.2; /* Líneas más juntas */
-            
-            color: #000000 !important; /* Negro absoluto */
-            background: white;
-            
-            /* Trucos para mejorar nitidez en térmicas */
-            text-rendering: geometricPrecision;
-            -webkit-font-smoothing: none;
-          }
-
-          /* CLASES UTILITARIAS */
-          .ticket-centered { text-align: center; }
-          
-          /* Línea divisoria sólida para mayor contraste */
-          .ticket-divider { 
-            border-top: 2px solid #000; 
-            margin: 4px 0; 
-            display: block;
-          }
-          
-          .ticket-row { 
-            display: flex; 
-            justify-content: space-between; 
-            width: 100%;
-          }
-          
-          /* Encabezado más grande pero misma fuente */
-          .ticket-title { 
-            font-size: 14px !important; 
-            font-weight: 900 !important;
-          }
-          
-          /* Total gigante */
-          .ticket-total { 
-            font-size: 14px !important; 
-            font-weight: 900 !important;
+            font-weight: 700 !important; /* Negrita */
+            font-size: 11px !important; /* Tamaño legible */
+            line-height: 1.1; /* Líneas compactas */
+            color: #000 !important;
           }
 
           /* Ocultar todo lo demás */
           body * { visibility: hidden; }
           #printable-ticket, #printable-ticket * { visibility: visible; }
+
+          /* UTILIDADES */
+          .ticket-centered { 
+            text-align: center; 
+            width: 100%;
+          }
+          
+          /* LINEA SEPARADORA */
+          .ticket-divider { 
+            border-top: 1px dashed #000; 
+            margin: 3px 0; 
+            display: block;
+            width: 100%;
+          }
+          
+          /* FILAS DE PRODUCTOS/TOTALES */
+          .ticket-row { 
+            display: flex; 
+            justify-content: space-between; 
+            width: 100%; /* Forzar a ocupar todo el ancho disponible */
+          }
+          
+          /* Textos más grandes */
+          .ticket-title { font-size: 14px !important; font-weight: 900 !important; }
+          .ticket-big { font-size: 12px !important; font-weight: 900 !important; }
         }
       `}</style>
 
@@ -104,17 +100,19 @@ export const TicketPrintLayout = ({ transaction }) => {
       {/* --- DATOS VENTA --- */}
       <div>Fecha: {transaction.date?.split(',')[0]}</div>
       <div>Hora: {transaction.time || transaction.timestamp}</div>
-      <div>Compra N°: {formattedId}</div>
+      <div className="ticket-big">Compra N°: {formattedId}</div>
       <div className="ticket-divider"></div>
 
       {/* --- ITEMS --- */}
-      <div style={{ marginBottom: '5px' }}>
+      <div style={{ marginBottom: '5px', width: '100%' }}>
         {(transaction.items || []).map((item, idx) => (
           <div key={idx} className="ticket-row">
-            <span style={{ maxWidth: '70%', textAlign: 'left' }}>
+            {/* Descripción del producto */}
+            <span style={{ maxWidth: '65%', textAlign: 'left', wordWrap: 'break-word' }}>
               {item.title} {(item.qty > 1) ? `(x${item.qty})` : ''}
             </span>
-            <span style={{ whiteSpace: 'nowrap' }}>
+            {/* Precio */}
+            <span style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
               $ {((item.qty || 1) * (item.price || 0)).toLocaleString('es-AR')}
             </span>
           </div>
@@ -133,7 +131,7 @@ export const TicketPrintLayout = ({ transaction }) => {
       </div>
       <div className="ticket-divider"></div>
       
-      <div className="ticket-row ticket-total">
+      <div className="ticket-row ticket-title">
         <span>TOTAL:</span>
         <span>$ {transaction.total?.toLocaleString('es-AR')}</span>
       </div>
@@ -145,7 +143,7 @@ export const TicketPrintLayout = ({ transaction }) => {
 
       {/* --- PIE DE PAGINA --- */}
       <br />
-      <div className="ticket-centered">¡Gracias por tu compra!</div>
+      <div className="ticket-centered ticket-big">¡Gracias por tu compra!</div>
       <div className="ticket-centered">Volve pronto :D</div>
       <br />
       <div className="ticket-centered" style={{ fontSize: '10px' }}>.</div>
