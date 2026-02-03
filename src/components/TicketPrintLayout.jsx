@@ -3,7 +3,10 @@ import React from 'react';
 export const TicketPrintLayout = ({ transaction }) => {
   if (!transaction) return null;
 
+  // Formatear ID a 6 dígitos (Ej: 1 -> 000001)
   const formattedId = String(transaction.id).padStart(6, '0');
+
+  // Calcular valores (Placeholder para descuentos futuros)
   const subtotal = transaction.total; 
   const discount = 0; 
   
@@ -36,12 +39,13 @@ export const TicketPrintLayout = ({ transaction }) => {
             top: 0;
             
             /* TRUCO: Usar un ancho un poco mayor y margen negativo 
-               para "comerse" el borde blanco izquierdo que pone Windows */
+               para "comerse" el borde blanco izquierdo que pone Windows por defecto */
             width: 58mm !important; 
             margin-left: -1mm !important; /* Mueve todo a la izquierda */
             padding-left: 0 !important;
             padding-right: 2mm !important; /* Espacio a la derecha para no cortar */
             
+            /* TIPOGRAFÍA: Arial, Negrita, Tamaño 11px (legible en térmica) */
             font-family: Arial, Helvetica, sans-serif !important;
             font-weight: 700 !important;
             font-size: 11px !important;
