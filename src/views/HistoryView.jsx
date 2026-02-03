@@ -26,6 +26,7 @@ export default function HistoryView({
   onEditTransaction,
   setTransactions,
   setDailyLogs,
+  showNotification // <--- RECIBIMOS LA PROP
 }) {
   // Estados de filtros
   const [viewMode, setViewMode] = useState('all');
@@ -104,14 +105,11 @@ export default function HistoryView({
       if (isVentaLog(log) && log.details) {
         const txId = log.details.transactionId || log.id;
         
-        // MODIFICADO: Si el ID ya existe en 'transactions' (activo), lo ignoramos aquí
-        // para que se muestre la versión editable (active) y no la histórica (readonly).
+        // Si el ID ya existe en 'transactions' (activo), lo ignoramos aquí
         if (activeIds.has(txId)) return;
 
         const logDate = normalizeDate(log.date);
         
-        // Ya no filtramos estrictamente por "hoy", sino por "existencia en activos".
-        // Esto permite que el historial muestre lo que NO está cargado en memoria activa.
         if (logDate) {
           txList.push({
             id: txId,
@@ -131,7 +129,7 @@ export default function HistoryView({
       }
     });
     return txList;
-  }, [dailyLogs, transactions]); // Agregamos transactions a dependencias
+  }, [dailyLogs, transactions]); 
 
   // =====================================================
   // TRANSACCIONES ACTIVAS (Del día o cargadas en memoria)
@@ -156,7 +154,6 @@ export default function HistoryView({
     let txList = [];
 
     if (viewMode === 'today') {
-      // Filtro simple por fecha de hoy
       const today = new Date();
       today.setHours(0,0,0,0);
       txList = [...activeTransactions, ...historicTransactions].filter(tx => {
@@ -165,10 +162,8 @@ export default function HistoryView({
          return txDate.getTime() === today.getTime();
       });
     } else if (viewMode === 'history') {
-      // Todo lo histórico (no editable)
       txList = historicTransactions;
     } else {
-      // Combinar Activas + Históricas
       txList = [...activeTransactions, ...historicTransactions];
     }
 
@@ -279,13 +274,14 @@ export default function HistoryView({
     searchQuery;
 
   // =====================================================
-  // GENERADOR DE PEDIDOS (REFACTORIZADO - SIEMPRE ACTIVO)
+  // GENERADOR DE PEDIDOS
   // =====================================================
   const generateRandomTransactions = () => {
     const { count, dateStart, dateEnd, timeStart, timeEnd } = generatorConfig;
     const products = inventory || [];
     if (products.length === 0) {
-      alert('No hay productos en el inventario para generar ventas');
+      if (showNotification) showNotification('warning', 'Sin productos', 'No hay productos en el inventario para generar ventas');
+      else alert('No hay productos en el inventario para generar ventas');
       return;
     }
 
@@ -360,7 +356,6 @@ export default function HistoryView({
       const txId = 1001 + i + Math.floor(Math.random() * 9000); 
       const installments = payment === 'Credito' ? Math.floor(Math.random() * 6) + 1 : 0;
 
-      // MODIFICADO: Siempre creamos una transacción ACTIVA, sin importar la fecha
       newActiveTransactions.push({
           id: txId,
           date: dateStr,
@@ -374,7 +369,6 @@ export default function HistoryView({
           status: 'completed',
       });
 
-      // También creamos el log para consistencia
       newLogs.push({
         id: Date.now() + i + Math.random(),
         timestamp: timeStr,
@@ -396,13 +390,14 @@ export default function HistoryView({
       setDailyLogs((prev) => [...newLogs, ...(prev || [])]);
     }
     
-    // Inyectamos todo en el estado activo para que sea editable
     if (newActiveTransactions.length > 0 && setTransactions) {
         setTransactions((prev) => [...newActiveTransactions, ...(prev || [])]);
     }
 
     setShowGeneratorModal(false);
-    alert(`✅ Se generaron ${newActiveTransactions.length} pedidos editables.`);
+    
+    if (showNotification) showNotification('success', 'Generación Exitosa', `Se generaron ${newActiveTransactions.length} pedidos editables.`);
+    else alert(`✅ Se generaron ${newActiveTransactions.length} pedidos editables.`);
   };
 
   const clearAllTransactions = () => {
@@ -411,7 +406,9 @@ export default function HistoryView({
       setDailyLogs((prev) => (prev || []).filter((log) => !isVentaLog(log)));
     }
     setShowDeleteModal(false);
-    alert('✅ Historial de transacciones eliminado');
+    
+    if (showNotification) showNotification('success', 'Historial Limpio', 'Se han eliminado todas las transacciones.');
+    else alert('✅ Historial de transacciones eliminado');
   };
 
   // =====================================================
@@ -574,7 +571,7 @@ export default function HistoryView({
           <tbody className="divide-y">
             {filteredTransactions.map((tx, index) => {
               const isVoided = tx.status === 'voided';
-              const isHistoric = tx.isHistoric; // Ahora será false si viene de activeTransactions
+              const isHistoric = tx.isHistoric;
 
               return (
                 <tr
@@ -682,7 +679,6 @@ export default function HistoryView({
                         >
                           <Eye size={14} />
                         </button>
-                        {/* BOTONES DE ACCIÓN: Se muestran si no es histórico O si es activeTransactions (isHistoric=false) */}
                         {!isHistoric && !isVoided && (
                           <button
                             onClick={() => onEditTransaction(tx)}
