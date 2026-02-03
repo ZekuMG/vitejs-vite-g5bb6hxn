@@ -14,6 +14,7 @@ import {
   Filter,
   ArrowUpDown,
   Plus,
+  FileText // Icono para el ticket
 } from 'lucide-react';
 import { PAYMENT_METHODS } from '../data';
 
@@ -26,7 +27,8 @@ export default function HistoryView({
   onEditTransaction,
   setTransactions,
   setDailyLogs,
-  showNotification // <--- RECIBIMOS LA PROP
+  showNotification, // Prop para notificaciones
+  onViewTicket      // Prop para ver ticket
 }) {
   // Estados de filtros
   const [viewMode, setViewMode] = useState('all');
@@ -41,7 +43,7 @@ export default function HistoryView({
   // Modal de detalle
   const [selectedTx, setSelectedTx] = useState(null);
 
-  // Modal generador
+  // Modal generador y borrar
   const [showGeneratorModal, setShowGeneratorModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [generatorConfig, setGeneratorConfig] = useState({
@@ -88,13 +90,8 @@ export default function HistoryView({
     return 0;
   };
 
-  const todayStr = useMemo(() => {
-    const today = new Date();
-    return `${today.getDate()}/${today.getMonth() + 1}/${today.getFullYear()}`;
-  }, []);
-
   // =====================================================
-  // TRANSACCIONES HISTÓRICAS (Filtradas para evitar duplicados)
+  // TRANSACCIONES HISTÓRICAS
   // =====================================================
   const historicTransactions = useMemo(() => {
     const txList = [];
@@ -122,7 +119,7 @@ export default function HistoryView({
             installments: log.details.installments || 0,
             total: getVentaTotal(log.details),
             status: 'completed',
-            isHistoric: true, // Esto oculta los botones
+            isHistoric: true, // Esto oculta los botones de editar/borrar pero permite ver ticket
             sortDate: new Date(logDate.year, logDate.month - 1, logDate.day),
           });
         }
@@ -132,14 +129,14 @@ export default function HistoryView({
   }, [dailyLogs, transactions]); 
 
   // =====================================================
-  // TRANSACCIONES ACTIVAS (Del día o cargadas en memoria)
+  // TRANSACCIONES ACTIVAS
   // =====================================================
   const activeTransactions = useMemo(() => {
     return (transactions || []).map((tx) => {
       const logDate = normalizeDate(tx.date);
       return {
         ...tx,
-        isHistoric: false, // CLAVE: Habilita los botones de edición
+        isHistoric: false,
         sortDate: logDate
           ? new Date(logDate.year, logDate.month - 1, logDate.day)
           : new Date(),
@@ -592,7 +589,7 @@ export default function HistoryView({
                           : 'text-slate-700'
                       }`}
                     >
-                      #{tx.id}
+                      #{String(tx.id).padStart(6, '0')}
                     </p>
                     <p className="text-[10px] text-slate-400">
                       {tx.date}
@@ -672,6 +669,7 @@ export default function HistoryView({
                   {currentUser.role === 'admin' && (
                     <td className="px-4 py-3 text-center">
                       <div className="flex items-center justify-center gap-1">
+                        {/* Botón Ver Detalles */}
                         <button
                           onClick={() => setSelectedTx(tx)}
                           className="text-slate-500 hover:bg-slate-200 p-1.5 rounded transition"
@@ -679,6 +677,17 @@ export default function HistoryView({
                         >
                           <Eye size={14} />
                         </button>
+                        
+                        {/* BOTÓN VER TICKET (NUEVO) */}
+                        <button
+                          onClick={() => onViewTicket(tx)}
+                          className="text-slate-700 hover:bg-slate-200 p-1.5 rounded transition"
+                          title="Ver Ticket"
+                        >
+                          <FileText size={14} />
+                        </button>
+
+                        {/* Botones Editar y Eliminar (Solo si no es histórico ni anulado) */}
                         {!isHistoric && !isVoided && (
                           <button
                             onClick={() => onEditTransaction(tx)}
@@ -733,7 +742,7 @@ export default function HistoryView({
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[80vh] overflow-hidden">
             <div className="p-4 border-b bg-slate-50 flex justify-between items-center">
               <h4 className="font-bold text-slate-800">
-                Venta #{selectedTx.id}
+                Venta #{String(selectedTx.id).padStart(6, '0')}
               </h4>
               <button
                 onClick={() => setSelectedTx(null)}
@@ -793,9 +802,17 @@ export default function HistoryView({
               </div>
             </div>
 
-            {/* Botones de acción en el modal */}
+            {/* Acciones Modal */}
             {currentUser.role === 'admin' && (
               <div className="p-4 border-t bg-slate-50 flex gap-2 justify-end">
+                {/* BOTÓN VER TICKET (NUEVO) */}
+                <button
+                  onClick={() => onViewTicket(selectedTx)}
+                  className="px-4 py-2 text-sm font-bold text-slate-700 bg-white border hover:bg-slate-50 rounded-lg transition flex items-center gap-2"
+                >
+                  <FileText size={14} /> Ticket
+                </button>
+
                 {selectedTx.status !== 'voided' && !selectedTx.isHistoric && (
                   <button
                     onClick={() => {
