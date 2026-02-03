@@ -12,76 +12,55 @@ export const TicketPrintLayout = ({ transaction }) => {
   
   return (
     <div id="printable-ticket" className="hidden-on-screen">
-      <style>{`
-        @media screen {
-          .hidden-on-screen { display: none; }
-        }
-        @media print {
-          /* 1. ELIMINAR MÁRGENES DEL NAVEGADOR */
-          @page {
-            margin: 0;
-            size: auto; 
-          }
-          
-          body {
-            margin: 0;
-            padding: 0;
-            background-color: white;
-          }
+  <style>{`
+    @media screen {
+      .hidden-on-screen { display: none; }
+    }
+    @media print {
+      /* 1. ORDEN EXACTA DE TAMAÑO */
+      @page {
+        /* Le decimos al navegador: "El papel mide 58mm de ancho" */
+        size: 58mm auto; 
+        margin: 0mm; /* Cero margen absoluto */
+      }
+      
+      body {
+        margin: 0;
+        padding: 0;
+        width: 58mm; /* Refuerzo del ancho */
+        background-color: white;
+      }
 
-          /* 2. CONFIGURACIÓN DEL CONTENEDOR */
-          #printable-ticket {
-            visibility: visible;
-            position: absolute;
-            left: 0;
-            top: 0;
-            
-            /* ANCHO EFECTIVO: 48mm es seguro para papel de 58mm 
-               sin que se corte el texto en los bordes físicos. */
-            width: 48mm; 
-            
-            /* Padding mínimo para que no se pegue al borde del papel */
-            padding-left: 1mm;
-            padding-right: 1mm;
-            
-            /* FUENTE NÍTIDA Y GRANDE PARA IMPRESORA TÉRMICA */
-            font-family: Arial, Helvetica, sans-serif !important;
-            font-weight: 700 !important; /* Negrita fuerte */
-            font-size: 11px !important; 
-            line-height: 1.1; 
-            color: #000 !important; /* Negro puro */
-          }
+      /* 2. CONFIGURACIÓN DEL CONTENEDOR */
+      #printable-ticket {
+        visibility: visible;
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 48mm; /* 48mm de contenido útil */
+        
+        /* IMPORTANTE: Padding 0 para que no agregue blanco extra */
+        padding: 0; 
+        margin-left: 1mm; /* Solo un pelín para no pegar al borde físico */
+        
+        font-family: Arial, Helvetica, sans-serif !important;
+        font-weight: 700 !important;
+        font-size: 11px !important;
+        line-height: 1.1;
+        color: #000 !important;
+      }
 
-          /* Ocultar todo lo demás de la app */
-          body * { visibility: hidden; }
-          #printable-ticket, #printable-ticket * { visibility: visible; }
-
-          /* UTILIDADES */
-          .ticket-centered { 
-            text-align: center; 
-            width: 100%;
-          }
-          
-          /* LINEA SEPARADORA */
-          .ticket-divider { 
-            border-top: 1px dashed #000; 
-            margin: 3px 0; 
-            display: block;
-            width: 100%;
-          }
-          
-          /* FILAS DE PRODUCTOS/TOTALES */
-          .ticket-row { 
-            display: flex; 
-            justify-content: space-between; 
-            width: 100%; 
-          }
-          
-          /* Textos más grandes para títulos y totales */
-          .ticket-title { font-size: 14px !important; font-weight: 900 !important; }
-          .ticket-big { font-size: 12px !important; font-weight: 900 !important; }
-        }
-      `}</style>
+      /* ... el resto de tus estilos (.ticket-centered, etc.) se quedan igual ... */
+      body * { visibility: hidden; }
+      #printable-ticket, #printable-ticket * { visibility: visible; }
+      
+      .ticket-centered { text-align: center; width: 100%; }
+      .ticket-divider { border-top: 1px dashed #000; margin: 3px 0; display: block; width: 100%; }
+      .ticket-row { display: flex; justify-content: space-between; width: 100%; }
+      .ticket-title { font-size: 14px !important; font-weight: 900 !important; }
+      .ticket-big { font-size: 12px !important; font-weight: 900 !important; }
+    }
+  `}</style>
 
       {/* --- ENCABEZADO --- */}
       <div className="ticket-centered ticket-title">COTILLON REBU</div>
