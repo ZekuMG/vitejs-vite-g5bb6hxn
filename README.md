@@ -17,7 +17,6 @@ If you are developing a production application, we recommend using TypeScript wi
 
 
 ```text
-.
 ├── public/
 │   ├── favicon.svg
 │   └── icons.svg
@@ -27,8 +26,12 @@ If you are developing a production application, we recommend using TypeScript wi
 │   │   ├── react.svg
 │   │   └── vite.svg
 │   ├── components/
+│   │   ├── AppModals.jsx
 │   │   ├── ProductImage.jsx
-│   │   └── Sidebar.jsx
+│   │   ├── Sidebar.jsx
+│   │   └── TicketPrintLayout.jsx
+│   ├── hooks/
+│   │   └── useBarcodeScanner.js
 │   ├── views/
 │   │   ├── CategoryManagerView.jsx
 │   │   ├── DashboardView.jsx
@@ -41,6 +44,7 @@ If you are developing a production application, we recommend using TypeScript wi
 │   ├── data.js
 │   ├── index.css
 │   └── main.jsx
+├── .env
 ├── .gitignore
 ├── eslint.config.js
 ├── index.html

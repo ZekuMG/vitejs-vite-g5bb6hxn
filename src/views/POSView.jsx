@@ -11,11 +11,11 @@ import {
   CheckCircle,
   Package,
   X,
-  SlidersHorizontal, // Icono Slider
+  SlidersHorizontal,
   ImageIcon,
   AlertTriangle,
-  LayoutGrid,        // Icono Cuadrícula
-  List,              // Icono Lista
+  LayoutGrid,
+  List,
   ScanBarcode
 } from 'lucide-react';
 import { PAYMENT_METHODS } from '../data';
@@ -39,9 +39,18 @@ export default function POSView({
   const [selectedCategory, setSelectedCategory] = useState('Todas');
   
   // --- ESTADOS DE VISTA ---
-  const [posViewMode, setPosViewMode] = useState('grid'); // 'grid' o 'list'
+  const [posViewMode, setPosViewMode] = useState('grid');
   const [gridColumns, setGridColumns] = useState(4); 
   const [showGridMenu, setShowGridMenu] = useState(false);
+
+  // =====================================================
+  // HELPER: Obtener stock efectivo (resta items en carrito)
+  // =====================================================
+  const getEffectiveStock = (productId, originalStock) => {
+    const itemInCart = cart.find(item => item.id === productId);
+    const qtyInCart = itemInCart ? itemInCart.quantity : 0;
+    return originalStock - qtyInCart;
+  };
 
   // Filtrado
   const filteredProducts = inventory.filter((product) => {
@@ -100,7 +109,7 @@ export default function POSView({
 
           <div className="flex items-center gap-2">
             
-            {/* 1. SLIDER (Solo en Grid) - A la izquierda */}
+            {/* 1. SLIDER (Solo en Grid) */}
             {posViewMode === 'grid' && (
               <div className="relative">
                 <button
@@ -132,7 +141,7 @@ export default function POSView({
                             step="1"
                             value={gridColumns}
                             onChange={(e) => setGridColumns(Number(e.target.value))}
-                            className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-fuchsia-600 hover:accent-fuchsia-500 z-10 relative"
+                            className="custom-range w-full"
                         />
                       </div>
 
@@ -194,13 +203,15 @@ export default function POSView({
                   }}
                 >
                   {filteredProducts.map((product) => {
-                    const isOutOfStock = product.stock === 0;
+                    // ✅ STOCK EN TIEMPO REAL
+                    const effectiveStock = getEffectiveStock(product.id, product.stock);
+                    const isOutOfStock = effectiveStock <= 0;
                     
-                    // Semáforo de stock
+                    // Semáforo de stock (usa effectiveStock)
                     let stockBadgeClass = 'bg-white/90 text-slate-600';
-                    if (product.stock > 10) stockBadgeClass = 'bg-green-100 text-green-700';
-                    else if (product.stock > 5) stockBadgeClass = 'bg-amber-100 text-amber-700';
-                    else if (product.stock > 0) stockBadgeClass = 'bg-red-100 text-red-700';
+                    if (effectiveStock > 10) stockBadgeClass = 'bg-green-100 text-green-700';
+                    else if (effectiveStock > 5) stockBadgeClass = 'bg-amber-100 text-amber-700';
+                    else if (effectiveStock > 0) stockBadgeClass = 'bg-red-100 text-red-700';
                     else stockBadgeClass = 'bg-slate-200 text-slate-500';
 
                     return (
@@ -221,9 +232,9 @@ export default function POSView({
                               </span>
                             </div>
                           )}
-                          {/* Badge Stock */}
+                          {/* Badge Stock - USA effectiveStock */}
                           <div className={`absolute top-2 right-2 px-2 py-0.5 rounded text-[10px] font-bold shadow-sm backdrop-blur-sm ${stockBadgeClass}`}>
-                            {isOutOfStock ? 'SIN STOCK' : `${product.stock} u.`}
+                            {isOutOfStock ? 'SIN STOCK' : `${effectiveStock} u.`}
                           </div>
                         </div>
 
@@ -254,13 +265,15 @@ export default function POSView({
                 /* --- VISTA LISTA --- */
                 <div className="flex flex-col gap-2">
                   {filteredProducts.map((product) => {
-                    const isOutOfStock = product.stock === 0;
+                    // ✅ STOCK EN TIEMPO REAL
+                    const effectiveStock = getEffectiveStock(product.id, product.stock);
+                    const isOutOfStock = effectiveStock <= 0;
                     
-                    // Semáforo de stock (Texto)
+                    // Semáforo de stock (Texto) - usa effectiveStock
                     let stockClass = 'text-slate-500';
-                    if (product.stock > 10) stockClass = 'text-green-600';
-                    else if (product.stock > 5) stockClass = 'text-amber-600';
-                    else if (product.stock > 0) stockClass = 'text-red-600';
+                    if (effectiveStock > 10) stockClass = 'text-green-600';
+                    else if (effectiveStock > 5) stockClass = 'text-amber-600';
+                    else if (effectiveStock > 0) stockClass = 'text-red-600';
                     else stockClass = 'text-slate-400';
 
                     return (
@@ -305,12 +318,12 @@ export default function POSView({
                           </div>
                         </div>
 
-                        {/* Precio y Stock */}
+                        {/* Precio y Stock - USA effectiveStock */}
                         <div className="text-right flex items-center gap-4">
                           <div className="text-right hidden sm:block">
                             <p className="text-[9px] text-slate-400 uppercase font-bold">Stock</p>
                             <p className={`text-xs font-bold ${stockClass}`}>
-                              {isOutOfStock ? 'AGOTADO' : `${product.stock} u.`}
+                              {isOutOfStock ? 'AGOTADO' : `${effectiveStock} u.`}
                             </p>
                           </div>
                           

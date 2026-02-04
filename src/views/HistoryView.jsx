@@ -592,10 +592,7 @@ export default function HistoryView({
                       #{String(tx.id).padStart(6, '0')}
                     </p>
                     <p className="text-[10px] text-slate-400">
-                      {tx.date}
-                      {tx.timestamp &&
-                        !tx.date?.includes(',') &&
-                        ` ${tx.timestamp}`}
+                      {tx.date}{(tx.time || tx.timestamp) && ` ${tx.time || tx.timestamp}`}
                     </p>
                     {isVoided && (
                       <span className="text-[9px] font-bold text-red-600 uppercase bg-red-100 px-1 rounded">

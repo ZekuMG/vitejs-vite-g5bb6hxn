@@ -578,13 +578,17 @@ export default function DashboardView({
                           className={`absolute -top-10 left-1/2 -translate-x-1/2 transition-all duration-200 bg-slate-800 text-white text-[10px] px-2 py-1 rounded whitespace-nowrap z-30 shadow-lg pointer-events-none ${isHovered ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}
                         >
                           <p className="font-bold">${item.sales.toLocaleString()}</p>
-                          <p className="text-slate-300">{item.count} ops</p>
+                          <p className="text-slate-300">{item.count} Ventas</p>
                         </div>
                         
                         <div 
-                            className={`w-full max-w-[40px] rounded-t transition-all duration-500 ${
-                              item.isCurrent ? 'bg-fuchsia-500' : item.sales > 0 ? 'bg-fuchsia-300' : 'bg-slate-100'
-                            } group-hover:bg-fuchsia-400`} 
+                          className={`w-full max-w-[40px] rounded-t transition-all duration-300 ${
+                            item.isCurrent 
+                              ? 'bg-fuchsia-500 hover:bg-fuchsia-600' 
+                              : item.sales > 0 
+                                ? 'bg-fuchsia-300 hover:bg-fuchsia-400' 
+                                : 'bg-slate-100 hover:bg-slate-200'
+                          }`}
                             style={{ height: item.sales > 0 ? `${Math.max(heightPercent, 5)}%` : '4px' }} 
                         />
                       </div>

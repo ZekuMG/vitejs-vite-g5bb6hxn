@@ -143,7 +143,7 @@ export default function InventoryView({
                               step="1"
                               value={gridColumns}
                               onChange={(e) => setGridColumns(Number(e.target.value))}
-                              className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-fuchsia-600 hover:accent-fuchsia-500 z-10 relative"
+                              className="custom-range w-full"
                           />
                       </div>
                       
@@ -243,7 +243,7 @@ export default function InventoryView({
                           {/* OVERLAY SIN STOCK */}
                           {isOutOfStock && (
                             <div className="absolute inset-0 bg-white/60 backdrop-blur-[1px] flex items-center justify-center z-10">
-                                <span className="bg-slate-800 text-white text-[10px] font-bold px-2 py-1 rounded shadow-sm border border-slate-600">SIN STOCK</span>
+                                <span className="bg-slate-800 text-white text-[10px] font-bold px-2 py-1 rounded shadow-sm border border-slate-600">AGOTADO</span>
                             </div>
                           )}
 
@@ -333,7 +333,7 @@ export default function InventoryView({
                             <div className="text-right">
                                 <p className="text-[10px] text-slate-400 uppercase font-bold">Stock</p>
                                 <p className={`font-bold ${stockColor}`}>
-                                    {isOutOfStock ? 'SIN STOCK' : `${product.stock} u.`}
+                                    {isOutOfStock ? 'AGOTADO' : `${product.stock} u.`}
                                 </p>
                             </div>
                             <div className="text-right w-20">

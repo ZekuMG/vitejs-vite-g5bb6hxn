@@ -573,6 +573,7 @@ export default function PartySupplyApp() {
       time: new Date().toLocaleTimeString('es-AR', {
         hour: '2-digit',
         minute: '2-digit',
+        hour12: false,
       }),
       user: currentUser.name,
       total,
