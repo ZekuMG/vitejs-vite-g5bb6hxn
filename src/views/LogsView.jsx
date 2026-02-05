@@ -25,7 +25,7 @@ import {
   AlertTriangle,
   FilterX,
   Wand2,
-  CheckCircle, // Agregamos icono para la lista de cambios
+  CheckCircle,
 } from 'lucide-react';
 
 export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
@@ -54,68 +54,76 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
   const safeLogs = Array.isArray(dailyLogs) ? dailyLogs : [];
 
   // =====================================================
-  // NORMALIZACIÓN DE ACCIONES - Unifica nombres duplicados
+  // HELPER GLOBAL DE PRECIOS (Sin decimales, redondeo arriba)
+  // =====================================================
+  const formatPrice = (amount) => {
+    return Math.ceil(Number(amount) || 0).toLocaleString('es-AR');
+  };
+
+  // =====================================================
+  // NORMALIZACIÓN DE ACCIONES
   // =====================================================
   const normalizeAction = (action) => {
     const actionMap = {
       'Nueva Venta': 'Venta Realizada',
       'Edición Venta': 'Modificación Pedido',
+      'Venta': 'Venta Realizada'
     };
     return actionMap[action] || action;
   };
 
   // =====================================================
-  // DETECCIÓN DE TIPO POR ESTRUCTURA DE DATOS
-  // Detecta el tipo real basándose en los campos presentes
-  // IMPORTANTE: El orden y especificidad de las condiciones importa
+  // DETECCIÓN DE TIPO POR ESTRUCTURA DE DATOS (CORREGIDO)
   // =====================================================
   const detectActionType = (log) => {
     const action = normalizeAction(log.action);
     const details = log.details;
 
-    // Si no hay detalles o es string, confiar en la acción normalizada
+    // 0. Si la acción ya viene bien definida, la respetamos.
+    if (['Venta Realizada', 'Modificación Pedido', 'Venta Anulada', 'Edición Producto'].includes(action)) {
+        return action;
+    }
+
     if (!details || typeof details === 'string') return action;
 
-    // 1. EDICIÓN PRODUCTO - Tiene 'product' (nombre del producto) y NO tiene transactionId/productChanges
-    //    La clave es que 'product' es un STRING con el nombre, no un objeto
+    // 1. EDICIÓN PRODUCTO
     if (
-      typeof details.product === 'string' &&
+      (typeof details.product === 'string' || details.title || details.name) &&
       !details.transactionId &&
       !details.productChanges &&
-      !details.itemsSnapshot
+      !details.itemsSnapshot &&
+      (details.changes || action.includes('Edición'))
     ) {
       return 'Edición Producto';
     }
 
-    // 2. VENTA REALIZADA - Tiene items, total, payment, pero NO tiene changes ni productChanges
+    // 2. VENTA REALIZADA (Corrección: No exigir 'payment' estrictamente)
     if (
       details.items &&
       details.total !== undefined &&
-      details.payment &&
-      !details.changes &&
+      !details.changes && 
+      !details.itemsSnapshot &&
       !details.productChanges
     ) {
       return 'Venta Realizada';
     }
 
-    // 3. VENTA ANULADA - Detectar por estructura específica
+    // 3. VENTA ANULADA
     if (
-      action === 'Venta Anulada' ||
-      (details.items && (details.originalTotal || details.status === 'voided'))
+      details.items && (details.originalTotal || details.status === 'voided')
     ) {
       return 'Venta Anulada';
     }
 
-    // 4. MODIFICACIÓN PEDIDO - Tiene transactionId Y (changes o productChanges o itemsSnapshot)
+    // 4. MODIFICACIÓN PEDIDO
     if (
-      details.transactionId ||
-      details.productChanges ||
-      details.itemsSnapshot
+      details.transactionId && 
+      (details.changes || details.itemsSnapshot || details.productChanges)
     ) {
       return 'Modificación Pedido';
     }
 
-    // 5. CIERRE DE CAJA - Tiene salesCount, totalSales, finalBalance
+    // 5. CIERRE DE CAJA
     if (
       details.salesCount !== undefined &&
       details.totalSales !== undefined &&
@@ -126,7 +134,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
         : 'Cierre de Caja';
     }
 
-    // 6. APERTURA DE CAJA - Tiene amount y scheduledClosingTime, NO tiene salesCount
+    // 6. APERTURA DE CAJA
     if (
       details.amount !== undefined &&
       details.scheduledClosingTime !== undefined &&
@@ -135,23 +143,22 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
       return 'Apertura de Caja';
     }
 
-    // 7. CATEGORÍA - Tiene type y name
+    // 7. CATEGORÍA
     if (details.type && details.name) {
       return 'Categoría';
     }
 
-    // 8. ALTA/BAJA DE PRODUCTO - Tiene title, price, stock, NO tiene 'product'
+    // 8. ALTA/BAJA DE PRODUCTO
     if (
-      details.title &&
+      (details.title || details.name) &&
       details.price !== undefined &&
-      details.stock !== undefined &&
-      !details.product
+      (action === 'Alta de Producto' || action === 'Baja Producto')
     ) {
       if (action === 'Baja Producto') return 'Baja Producto';
       return 'Alta de Producto';
     }
 
-    // 9. EDICIÓN MASIVA CATEGORÍAS (NUEVO)
+    // 9. EDICIÓN MASIVA CATEGORÍAS
     if (
       action === 'Edición Masiva Categorías' ||
       (details.count !== undefined && Array.isArray(details.details))
@@ -163,13 +170,12 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
   };
 
   // =====================================================
-  // HELPER: Obtener Transaction ID de cualquier estructura
+  // HELPER: Obtener Transaction ID
   // =====================================================
   const getTransactionId = (details) => {
     if (!details || typeof details === 'string') return null;
     const id = details.transactionId || details.id;
     if (!id) return null;
-    // Si es string con formato TRX-XXXX, extraer el número
     if (typeof id === 'string' && id.includes('TRX-')) {
       return id.replace('TRX-', '');
     }
@@ -177,7 +183,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
   };
 
   // =====================================================
-  // LOGS NORMALIZADOS con detección de tipo
+  // LOGS NORMALIZADOS
   // =====================================================
   const normalizedLogs = useMemo(() => {
     return safeLogs.map((log) => ({
@@ -190,6 +196,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
   const uniqueActions = [
     ...new Set(normalizedLogs.map((log) => log.action || 'Desconocido')),
   ].sort();
+  
   const hasActiveFilters =
     filterDateStart ||
     filterDateEnd ||
@@ -318,7 +325,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
   };
 
   // =====================================================
-  // RESUMEN - Detecta tipo y genera resumen apropiado
+  // RESUMEN
   // =====================================================
   const getSummary = (log) => {
     const action = log.action;
@@ -347,7 +354,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
               <ShoppingCart size={10} /> #{txId}
             </span>
             <span className="bg-fuchsia-100 text-fuchsia-700 px-2 py-0.5 rounded text-[10px] font-bold">
-              ${total.toLocaleString()}
+              ${formatPrice(total)}
             </span>
             <span className="text-slate-500 text-[10px]">
               {totalQty} uds ({items.length} items)
@@ -369,7 +376,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
               <XCircle size={10} /> #{txId}
             </span>
             <span className="text-red-500 text-[10px] line-through">
-              ${total.toLocaleString()}
+              ${formatPrice(total)}
             </span>
             {reason && (
               <span className="text-amber-600 text-[10px] italic truncate max-w-[150px]">
@@ -397,11 +404,11 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
             {changes.total && (
               <span className="text-[10px] flex items-center gap-1">
                 <span className="text-red-400 line-through">
-                  ${Number(changes.total.old).toLocaleString()}
+                  ${formatPrice(changes.total.old)}
                 </span>
                 <ArrowRight size={10} className="text-slate-400" />
                 <span className="text-green-600 font-bold">
-                  ${Number(changes.total.new).toLocaleString()}
+                  ${formatPrice(changes.total.new)}
                 </span>
               </span>
             )}
@@ -430,7 +437,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
 
       case 'Edición Producto': {
         const changes = details.changes || {};
-        const productName = details.product || details.title || 'Producto';
+        const productName = details.product || details.title || details.name || 'Producto';
         const productId = details.id || details.productId;
 
         // Generar badges para cada tipo de cambio
@@ -441,7 +448,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
               key="price"
               className="bg-green-100 text-green-700 px-1.5 py-0.5 rounded text-[10px]"
             >
-              ${changes.price.old} → ${changes.price.new}
+              ${formatPrice(changes.price.old)} → ${formatPrice(changes.price.new)}
             </span>
           );
         }
@@ -467,7 +474,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
               key="cost"
               className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[10px]"
             >
-              Costo: ${changes.purchasePrice.old} → ${changes.purchasePrice.new}
+              Costo: ${formatPrice(changes.purchasePrice.old)} → ${formatPrice(changes.purchasePrice.new)}
             </span>
           );
         }
@@ -501,16 +508,17 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
 
       case 'Alta de Producto': {
         const productId = details.id || details.productId;
+        const productName = details.title || details.name || 'Nuevo Producto';
         return (
           <div className="flex items-center gap-2 flex-wrap">
             <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1">
               <PlusCircle size={10} /> {productId ? `#${productId}` : 'Nuevo'}
             </span>
             <span className="font-medium text-slate-700 text-[10px] truncate max-w-[150px]">
-              {details.title}
+              {productName}
             </span>
             <span className="text-fuchsia-600 text-[10px] font-bold">
-              ${(details.price || 0).toLocaleString()}
+              ${formatPrice(details.price)}
             </span>
             <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-[10px]">
               Stock: {details.stock}
@@ -521,6 +529,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
 
       case 'Baja Producto': {
         const productId = details.id || details.productId;
+        const productName = details.title || details.name || 'Producto';
         return (
           <div className="flex items-center gap-2 flex-wrap">
             <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1">
@@ -528,7 +537,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
               {productId ? `#${productId}` : 'Eliminado'}
             </span>
             <span className="font-medium text-slate-700 text-[10px] truncate max-w-[150px]">
-              {details.title}
+              {productName}
             </span>
             <span className="text-red-500 text-[10px]">
               Stock perdido: {details.stock}
@@ -544,7 +553,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
               <DollarSign size={10} /> Apertura
             </span>
             <span className="text-green-700 font-bold text-[10px]">
-              ${(details.amount || 0).toLocaleString()}
+              ${formatPrice(details.amount)}
             </span>
             {details.scheduledClosingTime && (
               <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-[10px] flex items-center gap-1">
@@ -570,10 +579,10 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
               {action === 'Cierre Automático' ? 'Auto' : 'Cierre'}
             </span>
             <span className="text-green-600 font-bold text-[10px]">
-              +${(details.totalSales || 0).toLocaleString()}
+              +${formatPrice(details.totalSales)}
             </span>
             <span className="text-slate-700 font-bold text-[10px]">
-              Final: ${(details.finalBalance || 0).toLocaleString()}
+              Final: ${formatPrice(details.finalBalance)}
             </span>
             <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-[10px]">
               {details.salesCount || 0} ventas
@@ -656,7 +665,6 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
         );
       }
 
-      // NUEVO: Resumen para Edición Masiva
       case 'Edición Masiva Categorías': {
         return (
           <div className="flex items-center gap-2 flex-wrap">
@@ -671,16 +679,18 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
       }
 
       default: {
-        // Intentar detectar por estructura
+        // Intentar detectar por estructura antes de mostrar JSON
         if (details.items && details.total) {
+          // Parece una venta
           const txId = getTransactionId(details);
+          const items = details.items || [];
           return (
             <div className="flex items-center gap-2 flex-wrap">
               <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1">
                 <ShoppingCart size={10} /> #{txId}
               </span>
               <span className="bg-fuchsia-100 text-fuchsia-700 px-2 py-0.5 rounded text-[10px] font-bold">
-                ${(details.total || 0).toLocaleString()}
+                ${formatPrice(details.total)}
               </span>
             </div>
           );
@@ -705,14 +715,14 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
               Transacción #{txId}
             </span>
           );
-        if (details.title)
+        if (details.title || details.name)
           return (
-            <span className="text-slate-500 text-[10px]">{details.title}</span>
+            <span className="text-slate-500 text-[10px]">{details.title || details.name}</span>
           );
         if (details.amount)
           return (
             <span className="text-slate-500 text-[10px]">
-              ${details.amount.toLocaleString()}
+              ${formatPrice(details.amount)}
             </span>
           );
         return (
@@ -754,7 +764,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                   Venta #{txId}
                 </span>
                 <span className="bg-green-600 text-white px-3 py-1 rounded-full text-sm font-bold">
-                  ${total.toLocaleString()}
+                  ${formatPrice(total)}
                 </span>
               </div>
               <div className="p-3 bg-white">
@@ -789,13 +799,13 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                         <span className="bg-slate-200 text-slate-700 px-2 py-0.5 rounded text-[10px] font-bold">
                           {item.qty || item.quantity}x
                         </span>
-                        {item.title}
+                        {item.title || item.name || 'Producto'}
                       </span>
                       <span className="font-bold text-slate-800">
                         $
-                        {(
+                        {formatPrice(
                           (item.price || 0) * (item.qty || item.quantity || 0)
-                        ).toLocaleString()}
+                        )}
                       </span>
                     </div>
                   ))}
@@ -819,7 +829,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                   <XCircle size={16} /> Venta Anulada #{txId}
                 </span>
                 <span className="bg-red-100 px-3 py-1 rounded-full text-sm font-bold text-red-700 line-through">
-                  ${total.toLocaleString()}
+                  ${formatPrice(total)}
                 </span>
               </div>
               <div className="p-3 bg-white">
@@ -836,7 +846,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                         <span className="bg-green-500 text-white px-2 py-0.5 rounded text-[10px] font-bold">
                           +{item.qty || item.quantity}
                         </span>
-                        {item.title}
+                        {item.title || item.name || 'Producto'}
                       </span>
                       <span className="text-green-600 font-bold">
                         Restaurado
@@ -889,7 +899,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                         </td>
                         <td className="px-3 py-2 text-red-500 line-through text-center bg-red-50">
                           {key === 'total'
-                            ? `$${Number(val.old).toLocaleString()}`
+                            ? `$${formatPrice(val.old)}`
                             : val.old}
                         </td>
                         <td className="px-3 py-2 text-center w-8 text-slate-300">
@@ -897,7 +907,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                         </td>
                         <td className="px-3 py-2 text-green-600 font-bold text-center bg-green-50">
                           {key === 'total'
-                            ? `$${Number(val.new).toLocaleString()}`
+                            ? `$${formatPrice(val.new)}`
                             : val.new}
                         </td>
                       </tr>
@@ -985,13 +995,13 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                       className="text-xs flex justify-between bg-white p-2 border rounded shadow-sm"
                     >
                       <span className="font-bold text-slate-700">
-                        {item.qty}x {item.title}
+                        {item.qty}x {item.title || item.name}
                       </span>
                       <span className="text-slate-500">
                         $
-                        {(
+                        {formatPrice(
                           (Number(item.price) || 0) * (Number(item.qty) || 0)
-                        ).toLocaleString()}
+                        )}
                       </span>
                     </div>
                   ))}
@@ -1004,7 +1014,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
 
       case 'Edición Producto': {
         const changes = details.changes || {};
-        const productName = details.product || details.title || 'Producto';
+        const productName = details.product || details.title || details.name || 'Producto';
 
         return (
           <div className="space-y-3">
@@ -1042,7 +1052,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                       </td>
                       <td className="px-3 py-2 text-center text-red-500 bg-red-50 line-through">
                         {key.toLowerCase().includes('price')
-                          ? `$${val.old}`
+                          ? `$${formatPrice(val.old)}`
                           : val.old}
                       </td>
                       <td className="px-3 py-2 text-center text-slate-300">
@@ -1050,7 +1060,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                       </td>
                       <td className="px-3 py-2 text-center text-green-600 bg-green-50 font-bold">
                         {key.toLowerCase().includes('price')
-                          ? `$${val.new}`
+                          ? `$${formatPrice(val.new)}`
                           : val.new}
                       </td>
                     </tr>
@@ -1084,7 +1094,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                   Caja Inicial
                 </p>
                 <p className="text-lg font-bold text-slate-700">
-                  ${(details.openingBalance || 0).toLocaleString()}
+                  ${formatPrice(details.openingBalance)}
                 </p>
               </div>
               <div className="bg-green-50 p-3 rounded-lg border border-green-200">
@@ -1092,7 +1102,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                   Ventas del Día
                 </p>
                 <p className="text-lg font-bold text-green-700">
-                  +${(details.totalSales || 0).toLocaleString()}
+                  +${formatPrice(details.totalSales)}
                 </p>
               </div>
             </div>
@@ -1103,7 +1113,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                     Total al Cierre
                   </p>
                   <p className="text-2xl font-bold">
-                    ${(details.finalBalance || 0).toLocaleString()}
+                    ${formatPrice(details.finalBalance)}
                   </p>
                 </div>
                 <div className="text-right">
@@ -1153,7 +1163,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                     Monto Inicial
                   </p>
                   <p className="text-2xl font-bold text-green-800">
-                    ${(details.amount || 0).toLocaleString()}
+                    ${formatPrice(details.amount)}
                   </p>
                 </div>
               </div>
@@ -1256,7 +1266,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                       Nombre
                     </td>
                     <td className="px-3 py-2 font-bold text-slate-800">
-                      {details.title || '-'}
+                      {details.title || details.name || '-'}
                     </td>
                   </tr>
                   {details.brand && (
@@ -1284,7 +1294,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                       Precio Costo
                     </td>
                     <td className="px-3 py-2 text-slate-600">
-                      ${(details.purchasePrice || 0).toLocaleString()}
+                      ${formatPrice(details.purchasePrice)}
                     </td>
                   </tr>
                   <tr className="bg-slate-50">
@@ -1292,7 +1302,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                       Precio Venta
                     </td>
                     <td className="px-3 py-2 font-bold text-green-600">
-                      ${(details.price || 0).toLocaleString()}
+                      ${formatPrice(details.price)}
                     </td>
                   </tr>
                   <tr>
@@ -1329,7 +1339,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                       Nombre
                     </td>
                     <td className="px-3 py-2 font-bold text-slate-800">
-                      {details.title || '-'}
+                      {details.title || details.name || '-'}
                     </td>
                   </tr>
                   {details.brand && (
@@ -1355,7 +1365,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                       Precio
                     </td>
                     <td className="px-3 py-2 text-slate-600">
-                      ${(details.price || 0).toLocaleString()}
+                      ${formatPrice(details.price)}
                     </td>
                   </tr>
                   <tr className="bg-red-50">
@@ -1429,7 +1439,6 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
         );
       }
 
-      // NUEVO: Detalle para Edición Masiva
       case 'Edición Masiva Categorías': {
         const changeList = details.details || [];
         
@@ -1473,7 +1482,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
 
       default: {
         // Intentar detectar por estructura antes de mostrar JSON
-        if (details.items && details.total && details.payment) {
+        if (details.items && details.total) {
           // Parece una venta
           const txId = getTransactionId(details);
           const items = details.items || [];
@@ -1485,7 +1494,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                     Venta #{txId}
                   </span>
                   <span className="bg-green-600 text-white px-3 py-1 rounded-full text-sm font-bold">
-                    ${(details.total || 0).toLocaleString()}
+                    ${formatPrice(details.total)}
                   </span>
                 </div>
                 <div className="p-3 bg-white">
@@ -1496,13 +1505,13 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                         className="text-xs flex justify-between items-center text-slate-600 bg-slate-50 p-2 rounded"
                       >
                         <span>
-                          {item.qty || item.quantity}x {item.title}
+                          {item.qty || item.quantity}x {item.title || item.name}
                         </span>
                         <span className="font-bold">
                           $
-                          {(
+                          {formatPrice(
                             (item.price || 0) * (item.qty || item.quantity || 0)
-                          ).toLocaleString()}
+                          )}
                         </span>
                       </div>
                     ))}
@@ -1538,13 +1547,13 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                         className="text-xs flex justify-between bg-white p-2 border rounded"
                       >
                         <span>
-                          {item.qty}x {item.title}
+                          {item.qty}x {item.title || item.name}
                         </span>
                         <span>
                           $
-                          {(
+                          {formatPrice(
                             (Number(item.price) || 0) * (Number(item.qty) || 0)
-                          ).toLocaleString()}
+                          )}
                         </span>
                       </div>
                     ))}
@@ -1582,7 +1591,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
       'Horario Modificado': 'Cambio de Horario',
       'Sistema Iniciado': 'Información del Sistema',
       'Borrado Permanente': 'Registro Eliminado',
-      'Edición Masiva Categorías': 'Reporte de Cambios Masivos', // NUEVO TÍTULO
+      'Edición Masiva Categorías': 'Reporte de Cambios Masivos',
     };
     return titles[action] || 'Detalles';
   };

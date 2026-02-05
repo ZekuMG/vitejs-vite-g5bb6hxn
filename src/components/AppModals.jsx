@@ -25,6 +25,14 @@ import {
 import { PAYMENT_METHODS } from '../data';
 
 // ==========================================
+// HELPER GLOBAL PARA FORMATO DE PRECIO
+// Regla: Redondear hacia arriba, sin decimales, formato 1.000
+// ==========================================
+const formatPrice = (amount) => {
+  return Math.ceil(Number(amount) || 0).toLocaleString('es-AR');
+};
+
+// ==========================================
 // COMPONENTES AUXILIARES
 // ==========================================
 
@@ -73,7 +81,7 @@ export const CategoryMultiSelect = ({ allCategories, selectedCategories, onChang
 };
 
 // ==========================================
-// MODAL DE NOTIFICACIÓN (Reemplazo de Alert)
+// MODAL DE NOTIFICACIÓN
 // ==========================================
 
 export const NotificationModal = ({ isOpen, onClose, type, title, message }) => {
@@ -132,7 +140,7 @@ export const NotificationModal = ({ isOpen, onClose, type, title, message }) => 
 };
 
 // ==========================================
-// MODAL: PRODUCTO NO ENCONTRADO (ESCÁNER)
+// MODAL: PRODUCTO NO ENCONTRADO
 // ==========================================
 
 export const BarcodeNotFoundModal = ({ isOpen, scannedCode, onClose, onAddProduct }) => {
@@ -269,7 +277,7 @@ export const OpeningBalanceModal = ({ isOpen, onClose, tempOpeningBalance, setTe
           </div>
           <div className="bg-slate-50 p-3 rounded-lg border">
             <p className="text-xs text-slate-500 mb-2">Resumen de apertura:</p>
-            <div className="flex justify-between text-sm"><span className="text-slate-600">Monto inicial:</span><span className="font-bold text-slate-800">${Number(tempOpeningBalance || 0).toLocaleString()}</span></div>
+            <div className="flex justify-between text-sm"><span className="text-slate-600">Monto inicial:</span><span className="font-bold text-slate-800">${formatPrice(tempOpeningBalance)}</span></div>
             <div className="flex justify-between text-sm mt-1"><span className="text-slate-600">Cierre programado:</span><span className="font-bold text-slate-800">{tempClosingTime || '--:--'}</span></div>
           </div>
           <div className="flex gap-3">
@@ -298,11 +306,8 @@ export const ClosingTimeModal = ({ isOpen, onClose, closingTime, setClosingTime,
 export const AddProductModal = ({ isOpen, onClose, newItem, setNewItem, categories, onImageUpload, onAdd, inventory, onDuplicateBarcode }) => {
   if (!isOpen) return null;
 
-  // Validar código de barras duplicado
   const handleBarcodeChange = (value) => {
     setNewItem({ ...newItem, barcode: value });
-    
-    // Verificar si ya existe
     if (value && value.length >= 3) {
       const existing = inventory?.find(p => p.barcode === value);
       if (existing && onDuplicateBarcode) {
@@ -323,8 +328,6 @@ export const AddProductModal = ({ isOpen, onClose, newItem, setNewItem, categori
             <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Nombre</label>
             <input required type="text" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-fuchsia-500 outline-none" value={newItem.title} onChange={(e) => setNewItem({ ...newItem, title: e.target.value })} />
           </div>
-          
-          {/* CAMPO CÓDIGO DE BARRAS */}
           <div>
             <label className="text-xs font-bold text-slate-500 uppercase block mb-1 flex items-center gap-1">
               <ScanBarcode size={12} /> Código de Barras (Opcional)
@@ -338,7 +341,6 @@ export const AddProductModal = ({ isOpen, onClose, newItem, setNewItem, categori
             />
             <p className="text-[10px] text-slate-400 mt-1">Usado para escaneo rápido en Punto de Venta</p>
           </div>
-
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Costo ($)</label>
@@ -380,10 +382,8 @@ export const AddProductModal = ({ isOpen, onClose, newItem, setNewItem, categori
 export const EditProductModal = ({ product, onClose, setEditingProduct, categories, onImageUpload, editReason, setEditReason, onSave, inventory, onDuplicateBarcode }) => {
   if (!product) return null;
 
-  // Validar código de barras duplicado (excluyendo el producto actual)
   const handleBarcodeChange = (value) => {
     setEditingProduct({ ...product, barcode: value });
-    
     if (value && value.length >= 3) {
       const existing = inventory?.find(p => p.barcode === value && p.id !== product.id);
       if (existing && onDuplicateBarcode) {
@@ -404,8 +404,6 @@ export const EditProductModal = ({ product, onClose, setEditingProduct, categori
             <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Nombre</label>
             <input required type="text" className="w-full px-3 py-2 border rounded-lg" value={product.title} onChange={(e) => setEditingProduct({ ...product, title: e.target.value })} />
           </div>
-          
-          {/* CAMPO CÓDIGO DE BARRAS */}
           <div>
             <label className="text-xs font-bold text-slate-500 uppercase block mb-1 flex items-center gap-1">
               <ScanBarcode size={12} /> Código de Barras (Opcional)
@@ -418,7 +416,6 @@ export const EditProductModal = ({ product, onClose, setEditingProduct, categori
               onChange={(e) => handleBarcodeChange(e.target.value)} 
             />
           </div>
-
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Costo ($)</label>
@@ -476,7 +473,7 @@ export const EditTransactionModal = ({ transaction, onClose, inventory, setEditi
             {transactionSearch && (
               <div className="absolute top-full left-0 right-0 bg-white border shadow-lg rounded-b-lg max-h-40 overflow-y-auto z-10">
                 {inventory.filter((p) => p.title.toLowerCase().includes(transactionSearch.toLowerCase())).map((p) => (
-                  <button key={p.id} onClick={() => addTxItem(p)} className="w-full text-left p-2 hover:bg-fuchsia-50 text-xs flex justify-between items-center border-b"><span>{p.title}</span><span className="font-bold">${p.price}</span></button>
+                  <button key={p.id} onClick={() => addTxItem(p)} className="w-full text-left p-2 hover:bg-fuchsia-50 text-xs flex justify-between items-center border-b"><span>{p.title}</span><span className="font-bold">${formatPrice(p.price)}</span></button>
                 ))}
               </div>
             )}
@@ -484,7 +481,7 @@ export const EditTransactionModal = ({ transaction, onClose, inventory, setEditi
           <div className="space-y-2">
             {transaction.items.map((item, itemIndex) => (
               <div key={`item-${itemIndex}-${item.title}`} className="flex justify-between items-center bg-slate-50 p-2 rounded border">
-                <div className="flex-1"><p className="text-xs font-bold text-slate-700">{item.title}</p><p className="text-[10px] text-slate-500">${(Number(item.price) || 0).toLocaleString()}</p></div>
+                <div className="flex-1"><p className="text-xs font-bold text-slate-700">{item.title}</p><p className="text-[10px] text-slate-500">${formatPrice(item.price)}</p></div>
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-1 bg-white border rounded"><input type="number" min="1" className="w-12 p-1 text-xs border rounded text-center font-bold bg-white focus:ring-2 focus:ring-fuchsia-500 outline-none" value={item.qty} onChange={(e) => setTxItemQty(itemIndex, e.target.value)} /></div>
                   <button onClick={() => removeTxItem(itemIndex)} className="text-red-400 hover:text-red-600"><Trash2 size={14} /></button>
@@ -503,7 +500,7 @@ export const EditTransactionModal = ({ transaction, onClose, inventory, setEditi
             </div>
             <div>
               <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Total ($)</label>
-              <input readOnly type="text" className="w-full px-2 py-2 border rounded-lg font-bold text-slate-700 bg-slate-100 text-xs" value={(Number(transaction.total) || 0).toLocaleString()} />
+              <input readOnly type="text" className="w-full px-2 py-2 border rounded-lg font-bold text-slate-700 bg-slate-100 text-xs" value={formatPrice(transaction.total)} />
             </div>
           </div>
           {transaction.payment === 'Credito' && (
@@ -575,12 +572,12 @@ export const CloseCashModal = ({ isOpen, onClose, salesCount, totalSales, openin
         <div className="p-5 space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-blue-50 p-3 rounded-lg border border-blue-100"><p className="text-[10px] font-bold text-blue-500 uppercase">Ventas Realizadas</p><p className="text-2xl font-bold text-blue-700">{salesCount}</p></div>
-            <div className="bg-fuchsia-50 p-3 rounded-lg border border-fuchsia-100"><p className="text-[10px] font-bold text-fuchsia-500 uppercase">Total Vendido</p><p className="text-2xl font-bold text-fuchsia-700">${totalSales.toLocaleString()}</p></div>
+            <div className="bg-fuchsia-50 p-3 rounded-lg border border-fuchsia-100"><p className="text-[10px] font-bold text-fuchsia-500 uppercase">Total Vendido</p><p className="text-2xl font-bold text-fuchsia-700">${formatPrice(totalSales)}</p></div>
           </div>
           <div className="bg-slate-50 p-4 rounded-lg border space-y-2">
-            <div className="flex justify-between items-center text-sm"><span className="text-slate-500">Caja Inicial</span><span className="font-bold text-slate-700">${openingBalance.toLocaleString()}</span></div>
-            <div className="flex justify-between items-center text-sm"><span className="text-slate-500">+ Ventas del día</span><span className="font-bold text-fuchsia-600">+${totalSales.toLocaleString()}</span></div>
-            <div className="border-t pt-2 flex justify-between items-center"><span className="font-bold text-slate-700">Total en Caja</span><span className="text-xl font-bold text-green-600">${(openingBalance + totalSales).toLocaleString()}</span></div>
+            <div className="flex justify-between items-center text-sm"><span className="text-slate-500">Caja Inicial</span><span className="font-bold text-slate-700">${formatPrice(openingBalance)}</span></div>
+            <div className="flex justify-between items-center text-sm"><span className="text-slate-500">+ Ventas del día</span><span className="font-bold text-fuchsia-600">+${formatPrice(totalSales)}</span></div>
+            <div className="border-t pt-2 flex justify-between items-center"><span className="font-bold text-slate-700">Total en Caja</span><span className="text-xl font-bold text-green-600">${formatPrice(openingBalance + totalSales)}</span></div>
           </div>
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-700"><p className="font-bold flex items-center gap-2"><AlertTriangle size={16} /> Atención</p><p className="text-xs mt-1">Esta acción reiniciará las transacciones del día. Asegurate de haber revisado el resumen.</p></div>
         </div>
@@ -659,7 +656,7 @@ export const SaleSuccessModal = ({ transaction, onClose, onViewTicket }) => {
             <div className="bg-blue-50 p-3 rounded-lg"><p className="text-[10px] font-bold text-blue-400 uppercase">Vendedor</p><p className="font-bold text-blue-700">{transaction.user}</p></div>
             <div className="bg-fuchsia-50 p-3 rounded-lg"><p className="text-[10px] font-bold text-fuchsia-400 uppercase">Método de Pago</p><p className="font-bold text-fuchsia-700">{transaction.payment}{transaction.installments > 1 && ` (${transaction.installments} cuotas)`}</p></div>
           </div>
-          <div className="border-t pt-3 flex justify-between items-end"><span className="font-bold text-slate-600">TOTAL</span><span className="text-2xl font-bold text-green-600">${transaction.total?.toLocaleString()}</span></div>
+          <div className="border-t pt-3 flex justify-between items-end"><span className="font-bold text-slate-600">TOTAL</span><span className="text-2xl font-bold text-green-600">${formatPrice(transaction.total)}</span></div>
         </div>
 
         <div className="p-4 bg-slate-50 border-t flex gap-3">
@@ -751,23 +748,23 @@ export const TicketModal = ({ transaction, onClose, onPrint }) => {
                   <span className="flex-1 pr-2">
                     {item.qty > 1 ? `(${item.qty}) ` : ''}{item.title}
                   </span>
-                  <span>$ {((item.qty || 1) * (item.price || 0)).toLocaleString('es-AR')}</span>
+                  <span>$ {formatPrice((item.qty || 1) * (item.price || 0))}</span>
                 </div>
               ))}
             </div>
             <div className="border-t border-dashed border-slate-400 my-2"></div>
             
             {/* Totales */}
-            <div className="flex justify-between"><span>Subtotal:</span><span>$ {itemsSubtotal.toLocaleString('es-AR')}</span></div>
+            <div className="flex justify-between"><span>Subtotal:</span><span>$ {formatPrice(itemsSubtotal)}</span></div>
             
             {surcharge > 0 && (
-              <div className="flex justify-between"><span>Recargo (10%):</span><span>$ {surcharge.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></div>
+              <div className="flex justify-between"><span>Recargo (10%):</span><span>$ {formatPrice(surcharge)}</span></div>
             )}
             
             <div className="flex justify-between"><span>Descuento:</span><span>$ 0</span></div>
             <div className="border-t border-dashed border-slate-400 my-2"></div>
             
-            <div className="flex justify-between font-black text-sm"><span>TOTAL:</span><span>$ {transaction.total?.toLocaleString('es-AR')}</span></div>
+            <div className="flex justify-between font-black text-sm"><span>TOTAL:</span><span>$ {formatPrice(transaction.total)}</span></div>
             <div className="border-t border-dashed border-slate-400 my-2"></div>
             
             {/* Pago */}

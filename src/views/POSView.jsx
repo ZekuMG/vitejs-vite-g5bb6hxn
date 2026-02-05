@@ -12,46 +12,47 @@ import {
   Package,
   X,
   SlidersHorizontal,
-  ImageIcon,
-  AlertTriangle,
   LayoutGrid,
   List,
   ScanBarcode
 } from 'lucide-react';
 import { PAYMENT_METHODS } from '../data';
 
-  export default function POSView({
-    inventory,
-    categories,
-    addToCart,
-    cart,
-    removeFromCart,
-    updateCartItemQty,
-    selectedPayment,
-    setSelectedPayment,
-    installments,
-    setInstallments,
-    calculateTotal,
-    handleCheckout,
-    posSearch,
-    setPosSearch,
-    // --- NUEVOS PROPS PERSISTENTES ---
-    selectedCategory,
-    setSelectedCategory,
-    posViewMode,
-    setPosViewMode,
-    gridColumns,
-    setGridColumns
-  }) {
-    // El estado showGridMenu es puramente visual y temporal, puede quedar aquí.
-    const [showGridMenu, setShowGridMenu] = useState(false);
+export default function POSView({
+  inventory,
+  categories,
+  addToCart,
+  cart,
+  removeFromCart,
+  updateCartItemQty,
+  selectedPayment,
+  setSelectedPayment,
+  installments,
+  setInstallments,
+  calculateTotal,
+  handleCheckout,
+  posSearch,
+  setPosSearch,
+  // --- PROPS PERSISTENTES ---
+  selectedCategory,
+  setSelectedCategory,
+  posViewMode,
+  setPosViewMode,
+  gridColumns,
+  setGridColumns
+}) {
+  const [showGridMenu, setShowGridMenu] = useState(false);
 
   // =====================================================
-  // HELPER: Obtener stock efectivo (resta items en carrito)
+  // HELPER DE FORMATO (SIN DECIMALES, REDONDEO ARRIBA)
   // =====================================================
+  const formatPrice = (amount) => {
+    // Redondeo hacia arriba (Math.ceil) y formato es-AR (punto de miles)
+    return Math.ceil(Number(amount) || 0).toLocaleString('es-AR');
+  };
 
   // =====================================================
-  // HELPER: Obtener stock efectivo (resta items en carrito)
+  // HELPER: Obtener stock efectivo
   // =====================================================
   const getEffectiveStock = (productId, originalStock) => {
     const itemInCart = cart.find(item => item.id === productId);
@@ -139,7 +140,6 @@ import { PAYMENT_METHODS } from '../data';
                         </span>
                       </div>
                       
-                      {/* Slider visual */}
                       <div className="relative h-6 flex items-center">
                         <input
                             type="range"
@@ -210,11 +210,9 @@ import { PAYMENT_METHODS } from '../data';
                   }}
                 >
                   {filteredProducts.map((product) => {
-                    // ✅ STOCK EN TIEMPO REAL
                     const effectiveStock = getEffectiveStock(product.id, product.stock);
                     const isOutOfStock = effectiveStock <= 0;
                     
-                    // Semáforo de stock (usa effectiveStock)
                     let stockBadgeClass = 'bg-white/90 text-slate-600';
                     if (effectiveStock > 10) stockBadgeClass = 'bg-green-100 text-green-700';
                     else if (effectiveStock > 5) stockBadgeClass = 'bg-amber-100 text-amber-700';
@@ -228,7 +226,6 @@ import { PAYMENT_METHODS } from '../data';
                         disabled={isOutOfStock}
                         className={`group bg-white border rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all text-left flex flex-col relative ${isOutOfStock ? 'opacity-60 grayscale cursor-not-allowed' : 'hover:border-fuchsia-300 active:scale-[0.98]'}`}
                       >
-                        {/* Imagen */}
                         <div className="aspect-[4/3] bg-slate-50 relative overflow-hidden w-full">
                           {product.image ? (
                             <img src={product.image} alt={product.title} className="w-full h-full object-cover transition-transform group-hover:scale-105 duration-500" />
@@ -239,13 +236,11 @@ import { PAYMENT_METHODS } from '../data';
                               </span>
                             </div>
                           )}
-                          {/* Badge Stock - USA effectiveStock */}
                           <div className={`absolute top-2 right-2 px-2 py-0.5 rounded text-[10px] font-bold shadow-sm backdrop-blur-sm ${stockBadgeClass}`}>
                             {isOutOfStock ? 'SIN STOCK' : `${effectiveStock} u.`}
                           </div>
                         </div>
 
-                        {/* Info */}
                         <div className={`flex flex-col flex-1 w-full ${gridColumns > 6 ? 'p-2' : 'p-3'}`}>
                           {gridColumns <= 7 && (
                             <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide mb-1 truncate block">
@@ -257,7 +252,7 @@ import { PAYMENT_METHODS } from '../data';
                           </h3>
                           <div className="mt-auto pt-2 flex items-end justify-between">
                             <span className={`font-bold text-fuchsia-600 ${gridColumns > 6 ? 'text-sm' : 'text-lg'}`}>
-                              ${product.price}
+                              ${formatPrice(product.price)}
                             </span>
                             <div className={`w-6 h-6 rounded-full bg-slate-900 text-white flex items-center justify-center shadow-lg group-hover:bg-fuchsia-600 transition-colors ${gridColumns > 8 || isOutOfStock ? 'hidden' : 'flex'}`}>
                               <Plus size={12} />
@@ -272,11 +267,9 @@ import { PAYMENT_METHODS } from '../data';
                 /* --- VISTA LISTA --- */
                 <div className="flex flex-col gap-2">
                   {filteredProducts.map((product) => {
-                    // ✅ STOCK EN TIEMPO REAL
                     const effectiveStock = getEffectiveStock(product.id, product.stock);
                     const isOutOfStock = effectiveStock <= 0;
                     
-                    // Semáforo de stock (Texto) - usa effectiveStock
                     let stockClass = 'text-slate-500';
                     if (effectiveStock > 10) stockClass = 'text-green-600';
                     else if (effectiveStock > 5) stockClass = 'text-amber-600';
@@ -294,7 +287,6 @@ import { PAYMENT_METHODS } from '../data';
                             : 'hover:border-fuchsia-300 active:scale-[0.99]'
                         }`}
                       >
-                        {/* Imagen Mini */}
                         <div className="w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center overflow-hidden shrink-0 border relative">
                           {product.image ? (
                             <img src={product.image} alt="" className="w-full h-full object-cover" />
@@ -310,7 +302,6 @@ import { PAYMENT_METHODS } from '../data';
                           )}
                         </div>
 
-                        {/* Info Central */}
                         <div className="flex-1 min-w-0">
                           <h4 className="font-bold text-slate-800 text-sm truncate">{product.title}</h4>
                           <div className="flex items-center gap-2 mt-0.5">
@@ -325,7 +316,6 @@ import { PAYMENT_METHODS } from '../data';
                           </div>
                         </div>
 
-                        {/* Precio y Stock - USA effectiveStock */}
                         <div className="text-right flex items-center gap-4">
                           <div className="text-right hidden sm:block">
                             <p className="text-[9px] text-slate-400 uppercase font-bold">Stock</p>
@@ -335,10 +325,9 @@ import { PAYMENT_METHODS } from '../data';
                           </div>
                           
                           <div className="w-20 text-right">
-                            <p className="font-bold text-lg text-fuchsia-600">${product.price}</p>
+                            <p className="font-bold text-lg text-fuchsia-600">${formatPrice(product.price)}</p>
                           </div>
 
-                          {/* Botón + */}
                           {!isOutOfStock && (
                             <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center group-hover:bg-slate-900 group-hover:text-white transition-colors">
                               <Plus size={16} />
@@ -404,7 +393,7 @@ import { PAYMENT_METHODS } from '../data';
                       <span className="text-xs font-bold w-4 text-center">{item.quantity}</span>
                       <button onClick={() => updateCartItemQty(item.id, item.quantity + 1)} className="w-6 h-6 flex items-center justify-center bg-white rounded shadow-sm hover:text-green-500"><Plus size={12} /></button>
                     </div>
-                    <p className="font-bold text-slate-800">${(item.price * item.quantity).toLocaleString()}</p>
+                    <p className="font-bold text-slate-800">${formatPrice(item.price * item.quantity)}</p>
                   </div>
                 </div>
               </div>
@@ -459,17 +448,18 @@ import { PAYMENT_METHODS } from '../data';
           <div className="space-y-1 pt-2 border-t border-slate-200">
             <div className="flex justify-between text-xs text-slate-500">
               <span>Subtotal</span>
-              <span>${subtotal.toLocaleString()}</span>
+              <span>${formatPrice(subtotal)}</span>
             </div>
             {selectedPayment === 'Credito' && (
               <div className="flex justify-between text-xs text-amber-600 font-bold">
                 <span>Recargo (10%)</span>
-                <span>+${(subtotal * 0.1).toLocaleString()}</span>
+                {/* Calculamos el recargo redondeando hacia arriba para mostrar */}
+                <span>+${formatPrice(subtotal * 0.1)}</span>
               </div>
             )}
             <div className="flex justify-between items-end pt-2">
               <span className="text-sm font-bold text-slate-800 uppercase">Total a Pagar</span>
-              <span className="text-3xl font-black text-slate-900">${total.toLocaleString()}</span>
+              <span className="text-3xl font-black text-slate-900">${formatPrice(total)}</span>
             </div>
           </div>
 

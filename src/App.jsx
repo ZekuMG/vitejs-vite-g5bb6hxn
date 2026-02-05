@@ -597,6 +597,7 @@ export default function PartySupplyApp() {
     showNotification('success', 'Producto Agregado', 'El producto se guardó en el inventario.');
   };
 
+  // --- FUNCIÓN CORREGIDA: GUARDAR EDICIÓN Y REGISTRAR CAMBIOS ---
   const saveEditProduct = (e) => {
     e.preventDefault();
     if (!editingProduct) return;
@@ -606,6 +607,22 @@ export default function PartySupplyApp() {
     ) {
       showNotification('warning', 'Faltan datos', 'El producto debe tener al menos una categoría.');
       return;
+    }
+
+    // 1. Detectar cambios (Original vs Nuevo)
+    const original = inventory.find((p) => p.id === editingProduct.id);
+    const changes = {};
+    if (original) {
+      const newPrice = Number(editingProduct.price) || 0;
+      const newStock = Number(editingProduct.stock) || 0;
+      const newCost = Number(editingProduct.purchasePrice) || 0;
+      const newCat = editingProduct.categories[0];
+
+      if (original.price !== newPrice) changes.price = { old: original.price, new: newPrice };
+      if (original.stock !== newStock) changes.stock = { old: original.stock, new: newStock };
+      if (original.purchasePrice !== newCost) changes.purchasePrice = { old: original.purchasePrice, new: newCost };
+      if (original.category !== newCat) changes.category = { old: original.category, new: newCat };
+      if (original.title !== editingProduct.title) changes.title = { old: original.title, new: editingProduct.title };
     }
 
     setInventory(
@@ -622,7 +639,17 @@ export default function PartySupplyApp() {
       )
     );
     
-    addLog('Edición Producto', { productId: editingProduct.id, title: editingProduct.title }, editReason);
+    // 2. Guardar Log con los cambios detectados
+    addLog(
+      'Edición Producto', 
+      { 
+        productId: editingProduct.id, 
+        title: editingProduct.title,
+        changes: changes // ¡Ahora sí enviamos los cambios!
+      }, 
+      editReason
+    );
+
     setEditingProduct(null);
     setEditReason('');
     showNotification('success', 'Producto Editado', 'Los cambios se guardaron correctamente.');
@@ -661,7 +688,7 @@ export default function PartySupplyApp() {
   };
   const removeFromCart = (id) => setCart(cart.filter((c) => c.id !== id));
 
-  // --- CHECKOUT ---
+  // --- CHECKOUT (CORREGIDO: Ahora guarda los items en el log) ---
   const handleCheckout = () => {
     const total = calculateTotal();
     
@@ -709,11 +736,19 @@ export default function PartySupplyApp() {
     };
     
     setTransactions([tx, ...transactions]);
+    
+    // --- AQUÍ ESTABA EL ERROR EN VENTA ---
     addLog(
       'Venta Realizada',
-      { transactionId: tx.id, total: total },
+      { 
+        transactionId: tx.id, 
+        total: total,
+        items: tx.items, // ¡Agregado! Ahora el log sabe qué productos se vendieron
+        payment: selectedPayment
+      },
       'Venta regular'
     );
+
     setSaleSuccessModal(tx);
     setCart([]);
     setInstallments(1);
@@ -748,9 +783,14 @@ export default function PartySupplyApp() {
           t.id === tx.id ? { ...t, status: 'voided' } : t
         )
       );
+      // En la anulación también conviene guardar items para saber qué se devolvió
       addLog(
         'Venta Anulada',
-        { transactionId: tx.id },
+        { 
+          transactionId: tx.id, 
+          originalTotal: tx.total,
+          itemsReturned: tx.items 
+        },
         refundReason
       );
       showNotification('warning', 'Venta Anulada', 'Se anuló la venta y se devolvió el stock.');
@@ -832,17 +872,74 @@ export default function PartySupplyApp() {
     });
   };
 
+  // --- FUNCIÓN CORREGIDA PARA CALCULAR Y GUARDAR CAMBIOS ---
   const handleSaveEditedTransaction = (e) => {
     e.preventDefault();
     if (!editingTransaction) return;
+    
+    // 1. Encontrar la transacción original para comparar
     const originalTx = transactions.find((t) => t.id === editingTransaction.id);
     if (!originalTx) return;
 
+    // 2. Calcular diferencias Generales (Total y Pago)
+    const changes = {};
+    if (originalTx.total !== editingTransaction.total) {
+        changes.total = { old: originalTx.total, new: editingTransaction.total };
+    }
+    if (originalTx.payment !== editingTransaction.payment) {
+        changes.payment = { old: originalTx.payment, new: editingTransaction.payment };
+    }
+
+    // 3. Calcular diferencias de Productos (Add/Remove/Qty)
+    const productChanges = [];
+    // Creamos mapas para búsqueda rápida
+    const oldItemsMap = new Map(originalTx.items.map(i => [i.id || i.productId, i]));
+    // Nota: editingTransaction puede tener items sin ID real si son nuevos, usamos una lógica mixta
+    
+    // Detectar cambios o nuevos items
+    editingTransaction.items.forEach(newItem => {
+        const itemId = newItem.id || newItem.productId;
+        const oldItem = oldItemsMap.get(itemId);
+        
+        if (!oldItem) {
+            // Nuevo item agregado
+            productChanges.push({
+                title: newItem.title,
+                oldQty: 0,
+                newQty: newItem.qty,
+                diff: newItem.qty
+            });
+        } else if (oldItem.qty !== newItem.qty) {
+            // Cantidad cambiada
+            productChanges.push({
+                title: newItem.title,
+                oldQty: oldItem.qty,
+                newQty: newItem.qty,
+                diff: newItem.qty - oldItem.qty
+            });
+        }
+        // Eliminamos del mapa los procesados para saber cuáles quedaron (borrados)
+        if (oldItem) oldItemsMap.delete(itemId);
+    });
+
+    // Los que quedaron en el mapa fueron eliminados
+    oldItemsMap.forEach(oldItem => {
+        productChanges.push({
+            title: oldItem.title,
+            oldQty: oldItem.qty,
+            newQty: 0,
+            diff: -oldItem.qty
+        });
+    });
+
+    // 4. Lógica de Stock (Mantenemos tu lógica original de reversión y aplicación)
     let tempInventory = [...inventory];
+    // Revertir stock original
     tempInventory = tempInventory.map((prod) => {
       const originalItem = originalTx.items.find((i) => i.id === prod.id);
       return originalItem ? { ...prod, stock: prod.stock + (Number(originalItem.qty) || 0) } : prod;
     });
+    // Validar nuevo stock
     const stockErrors = [];
     editingTransaction.items.forEach((newItem) => {
       const prod = tempInventory.find((p) => p.id === newItem.id);
@@ -854,17 +951,30 @@ export default function PartySupplyApp() {
       showNotification('error', 'Stock Insuficiente', `Error con: ${stockErrors.join('\n- ')}`);
       return;
     }
+    // Aplicar nuevo stock
     tempInventory = tempInventory.map((prod) => {
       const newItem = editingTransaction.items.find((i) => i.id === prod.id);
       return newItem ? { ...prod, stock: prod.stock - (Number(newItem.qty) || 0) } : prod;
     });
 
+    // 5. Guardar todo
     setInventory(tempInventory);
     setTransactions(
       transactions.map((t) => (t.id === editingTransaction.id ? editingTransaction : t))
     );
 
-    addLog('Modificación Pedido', { transactionId: editingTransaction.id }, editReason);
+    // GUARDAR EL LOG COMPLETO CON DETALLES DE CAMBIOS
+    addLog(
+      'Modificación Pedido', 
+      { 
+        transactionId: editingTransaction.id,
+        changes: changes,                // Cambios monetarios
+        productChanges: productChanges,  // Cambios de productos
+        itemsSnapshot: editingTransaction.items // Estado final
+      }, 
+      editReason
+    );
+
     setEditingTransaction(null);
     setEditReason('');
     showNotification('success', 'Pedido Actualizado', 'La transacción fue modificada con éxito.');
