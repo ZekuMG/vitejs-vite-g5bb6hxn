@@ -6,38 +6,30 @@ export const TicketPrintLayout = ({ transaction }) => {
   // Formatear ID a 6 dígitos (Ej: 1 -> 000001)
   const formattedId = String(transaction.id).padStart(6, '0');
 
-  // Formatear hora a 24hrs (por si viene en AM/PM)
+  // Formatear hora a 24hrs
   const formatTime24 = (timeStr) => {
     if (!timeStr) return '--:--';
-    
-    // Si ya está en formato 24h (ej: "16:45"), devolverlo
     if (/^\d{1,2}:\d{2}$/.test(timeStr) && !timeStr.toLowerCase().includes('m')) {
       return timeStr;
     }
-    
-    // Convertir AM/PM a 24h
     const match = timeStr.match(/(\d{1,2}):(\d{2})\s*(a\.?\s*m\.?|p\.?\s*m\.?)?/i);
     if (match) {
       let hours = parseInt(match[1], 10);
       const minutes = match[2];
       const period = match[3]?.toLowerCase().replace(/[\s.]/g, '') || '';
-      
       if (period === 'pm' && hours !== 12) hours += 12;
       if (period === 'am' && hours === 12) hours = 0;
-      
       return `${hours.toString().padStart(2, '0')}:${minutes}`;
     }
-    
     return timeStr;
   };
 
-  // Formatear precio sin decimales innecesarios
+  // Formatear precio
   const formatPrice = (value) => {
     const num = Number(value) || 0;
     return num % 1 === 0 ? num.toLocaleString('es-AR') : num.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
-  // Calcular valores
   const subtotal = transaction.total; 
   const discount = 0;
   const timeFormatted = formatTime24(transaction.time || transaction.timestamp);
@@ -50,7 +42,7 @@ export const TicketPrintLayout = ({ transaction }) => {
         }
         @media print {
           @page {
-            size: 58mm auto;
+            size: 58mm auto; /* Ajuste para impresora térmica */
             margin: 0mm 1mm !important;
           }
           
@@ -71,99 +63,93 @@ export const TicketPrintLayout = ({ transaction }) => {
             top: 0;
             width: 54mm !important;
             padding: 2mm !important;
-            font-family: 'Courier New', monospace !important;
-            font-size: 11px !important;
-            line-height: 1.3;
+            
+            /* -- EDICIÓN QUIRÚRGICA: FUENTE ARIAL, TAMAÑO 8, NEGRITA -- */
+            font-family: Arial, sans-serif !important; 
+            font-size: 8px !important;
+            font-weight: bold !important;
+            
+            line-height: 1.2;
             color: #000 !important;
           }
 
           .ticket-header {
             text-align: center;
-            font-weight: bold;
-            font-size: 13px !important;
+            font-size: 10px !important; /* Un poco más grande para el título */
+            font-weight: 900 !important; /* Extra bold */
             margin-bottom: 2mm;
+            text-transform: uppercase;
           }
           
           .ticket-subheader {
             text-align: center;
-            font-size: 10px !important;
-            margin-bottom: 1mm;
+            font-size: 8px !important;
+            font-weight: bold !important;
+            margin-bottom: 0.5mm;
           }
 
           .ticket-divider {
             border: none;
             border-top: 1px dashed #000;
-            margin: 2mm 0;
+            margin: 1.5mm 0;
           }
 
           .ticket-info {
-            font-size: 10px !important;
-            margin: 1mm 0;
+            font-size: 8px !important;
+            font-weight: bold !important;
+            margin: 0.5mm 0;
           }
 
-          .ticket-info-bold {
-            font-size: 11px !important;
-            font-weight: bold;
-            margin: 1mm 0;
+          /* Títulos de sección destacados */
+          .ticket-section-title {
+             font-size: 9px !important;
+             font-weight: 900 !important;
+             text-transform: uppercase;
+             margin: 1mm 0;
           }
 
           .ticket-item {
-            display: table;
+            display: flex;
+            justify-content: space-between;
             width: 100%;
-            margin: 1mm 0;
-            font-size: 10px !important;
+            margin: 0.5mm 0;
+            font-size: 8px !important;
+            font-weight: bold !important;
           }
 
           .ticket-item-name {
-            display: table-cell;
-            width: 70%;
-            word-wrap: break-word;
-            padding-right: 2mm;
+            flex: 1;
+            padding-right: 1mm;
+            text-align: left;
+            word-break: break-all; /* Evita desbordes */
           }
 
           .ticket-item-price {
-            display: table-cell;
-            width: 30%;
             text-align: right;
             white-space: nowrap;
-            font-weight: bold;
           }
 
           .ticket-total-row {
-            display: table;
+            display: flex;
+            justify-content: space-between;
             width: 100%;
-            margin: 1mm 0;
-            font-size: 10px !important;
-          }
-
-          .ticket-total-label {
-            display: table-cell;
-            width: 50%;
-          }
-
-          .ticket-total-value {
-            display: table-cell;
-            width: 50%;
-            text-align: right;
-            font-weight: bold;
+            margin: 0.5mm 0;
+            font-size: 8px !important;
+            font-weight: bold !important;
           }
 
           .ticket-grand-total {
-            font-size: 14px !important;
-            font-weight: bold;
+            font-size: 12px !important; /* Total bien visible */
+            font-weight: 900 !important;
             margin: 2mm 0;
           }
 
           .ticket-footer {
             text-align: center;
-            font-size: 11px !important;
-            font-weight: bold;
+            font-size: 9px !important;
+            font-weight: bold !important;
             margin-top: 3mm;
-          }
-
-          .ticket-footer-small {
-            text-align: center;
-            font-size: 10px !important;
+            text-transform: uppercase;
           }
         }
       `}</style>
@@ -178,13 +164,13 @@ export const TicketPrintLayout = ({ transaction }) => {
       <div className="ticket-subheader">IG: @rebucotillon</div>
       <hr className="ticket-divider" />
 
-      <div className="ticket-info">Fecha: {transaction.date?.split(',')[0]}</div>
-      <div className="ticket-info">Hora: {timeFormatted}</div>
-      <div className="ticket-info-bold">Compra N°: {formattedId}</div>
+      <div className="ticket-info">FECHA: {transaction.date?.split(',')[0]}</div>
+      <div className="ticket-info">HORA: {timeFormatted}</div>
+      <div className="ticket-section-title">COMPRA N°: {formattedId}</div>
       <hr className="ticket-divider" />
 
       {/* ITEMS */}
-      <div style={{ marginBottom: '2mm' }}>
+      <div style={{ marginBottom: '1mm' }}>
         {(transaction.items || []).map((item, idx) => {
           const qty = item.qty || item.quantity || 1;
           const price = Number(item.price) || 0;
@@ -193,7 +179,7 @@ export const TicketPrintLayout = ({ transaction }) => {
           return (
             <div key={idx} className="ticket-item">
               <span className="ticket-item-name">
-                {qty > 1 ? `${qty}x ` : ''}{item.title}
+                {qty > 1 ? `(${qty}) ` : ''}{item.title.toUpperCase()}
               </span>
               <span className="ticket-item-price">
                 ${formatPrice(lineTotal)}
@@ -206,32 +192,31 @@ export const TicketPrintLayout = ({ transaction }) => {
 
       {/* TOTALES */}
       <div className="ticket-total-row">
-        <span className="ticket-total-label">Subtotal:</span>
-        <span className="ticket-total-value">${formatPrice(subtotal)}</span>
+        <span>SUBTOTAL:</span>
+        <span>${formatPrice(subtotal)}</span>
       </div>
       
       {discount > 0 && (
         <div className="ticket-total-row">
-          <span className="ticket-total-label">Descuento:</span>
-          <span className="ticket-total-value">-${formatPrice(discount)}</span>
+          <span>DESCUENTO:</span>
+          <span>-${formatPrice(discount)}</span>
         </div>
       )}
       <hr className="ticket-divider" />
       
       <div className="ticket-total-row ticket-grand-total">
-        <span className="ticket-total-label">TOTAL:</span>
-        <span className="ticket-total-value">${formatPrice(transaction.total)}</span>
+        <span>TOTAL:</span>
+        <span>${formatPrice(transaction.total)}</span>
       </div>
       <hr className="ticket-divider" />
 
-      <div className="ticket-info-bold">Pago: {transaction.payment?.toUpperCase()}</div>
+      <div className="ticket-info">PAGO: {transaction.payment?.toUpperCase()}</div>
       {transaction.installments > 1 && (
-        <div className="ticket-info">Cuotas: {transaction.installments}</div>
+        <div className="ticket-info">CUOTAS: {transaction.installments}</div>
       )}
-      <hr className="ticket-divider" />
-
-      <div className="ticket-footer">¡Gracias por tu compra!</div>
-      <div className="ticket-footer-small">Volve pronto :D</div>
+      
+      <div className="ticket-footer">¡GRACIAS POR SU COMPRA!</div>
+      <div className="ticket-subheader" style={{marginTop: '1mm'}}>VOLVE PRONTO :D</div>
       <br />
     </div>
   );

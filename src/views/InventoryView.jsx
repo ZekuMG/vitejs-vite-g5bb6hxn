@@ -28,18 +28,26 @@ export default function InventoryView({
   setEditingProduct,
   handleDeleteProduct,
   inventoryViewMode,     
-  setInventoryViewMode
+  setInventoryViewMode,
+  // EDICIÓN QUIRÚRGICA: Nuevos props persistentes
+  gridColumns,
+  setGridColumns
 }) {
   // --- ESTADOS LOCALES ---
   const [selectedProduct, setSelectedProduct] = useState(null); 
   
-  // Estado para las columnas (Slider), inicia en 5
-  const [gridColumns, setGridColumns] = useState(5); 
+  // El menú del slider es visual/temporal, se queda local.
   const [showGridMenu, setShowGridMenu] = useState(false);
 
-  // --- FILTROS ---
+// --- FILTROS ---
   const filteredInventory = inventory.filter((item) => {
-    const matchesSearch = item.title.toLowerCase().includes(inventorySearch.toLowerCase());
+    // EDICIÓN QUIRÚRGICA: Se agrega soporte para barcode e ID
+    const term = inventorySearch.toLowerCase();
+    const matchesSearch = 
+      item.title.toLowerCase().includes(term) ||
+      (item.barcode && item.barcode.toString().toLowerCase().includes(term)) ||
+      item.id.toString().includes(term);
+
     const matchesCategory =
       inventoryCategoryFilter === 'Todas' ||
       (Array.isArray(item.categories)

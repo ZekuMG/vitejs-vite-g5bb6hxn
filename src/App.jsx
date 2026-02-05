@@ -158,6 +158,14 @@ export default function PartySupplyApp() {
   const [inventoryCategoryFilter, setInventoryCategoryFilter] = useState('Todas');
   const [inventorySearch, setInventorySearch] = useState('');
   const [posSearch, setPosSearch] = useState('');
+  
+  // -- NUEVOS ESTADOS PERSISTENTES PARA POS (EDICIÓN QUIRÚRGICA) --
+  const [posSelectedCategory, setPosSelectedCategory] = useState('Todas');
+  const [posViewMode, setPosViewMode] = useState('grid');
+  const [posGridColumns, setPosGridColumns] = useState(4);
+
+  // -- NUEVOS ESTADOS PERSISTENTES PARA INVENTARIO --
+  const [inventoryGridColumns, setInventoryGridColumns] = useState(5);
 
   // ==========================================
   // 4. SISTEMA DE NOTIFICACIONES
@@ -1088,6 +1096,8 @@ export default function PartySupplyApp() {
               currentUser={currentUser}
               inventoryViewMode={inventoryViewMode}
               setInventoryViewMode={setInventoryViewMode}
+              gridColumns={inventoryGridColumns}
+              setGridColumns={setInventoryGridColumns}
               inventorySearch={inventorySearch}
               setInventorySearch={setInventorySearch}
               inventoryCategoryFilter={inventoryCategoryFilter}
@@ -1143,6 +1153,13 @@ export default function PartySupplyApp() {
                 handleCheckout={handleCheckout}
                 posSearch={posSearch}
                 setPosSearch={setPosSearch}
+                // --- NUEVOS PROPS PERSISTENTES ---
+                selectedCategory={posSelectedCategory}
+                setSelectedCategory={setPosSelectedCategory}
+                posViewMode={posViewMode}
+                setPosViewMode={setPosViewMode}
+                gridColumns={posGridColumns}
+                setGridColumns={setPosGridColumns}
               />
             ))}
           {activeTab === 'history' && (

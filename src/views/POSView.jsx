@@ -20,28 +20,35 @@ import {
 } from 'lucide-react';
 import { PAYMENT_METHODS } from '../data';
 
-export default function POSView({
-  inventory,
-  categories,
-  addToCart,
-  cart,
-  removeFromCart,
-  updateCartItemQty,
-  selectedPayment,
-  setSelectedPayment,
-  installments,
-  setInstallments,
-  calculateTotal,
-  handleCheckout,
-  posSearch,
-  setPosSearch
-}) {
-  const [selectedCategory, setSelectedCategory] = useState('Todas');
-  
-  // --- ESTADOS DE VISTA ---
-  const [posViewMode, setPosViewMode] = useState('grid');
-  const [gridColumns, setGridColumns] = useState(4); 
-  const [showGridMenu, setShowGridMenu] = useState(false);
+  export default function POSView({
+    inventory,
+    categories,
+    addToCart,
+    cart,
+    removeFromCart,
+    updateCartItemQty,
+    selectedPayment,
+    setSelectedPayment,
+    installments,
+    setInstallments,
+    calculateTotal,
+    handleCheckout,
+    posSearch,
+    setPosSearch,
+    // --- NUEVOS PROPS PERSISTENTES ---
+    selectedCategory,
+    setSelectedCategory,
+    posViewMode,
+    setPosViewMode,
+    gridColumns,
+    setGridColumns
+  }) {
+    // El estado showGridMenu es puramente visual y temporal, puede quedar aquí.
+    const [showGridMenu, setShowGridMenu] = useState(false);
+
+  // =====================================================
+  // HELPER: Obtener stock efectivo (resta items en carrito)
+  // =====================================================
 
   // =====================================================
   // HELPER: Obtener stock efectivo (resta items en carrito)
