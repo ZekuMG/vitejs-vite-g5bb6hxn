@@ -42,14 +42,14 @@ export const TicketPrintLayout = ({ transaction }) => {
         }
         @media print {
           @page {
-            size: 58mm auto; /* Ajuste para impresora térmica */
-            margin: 0mm 1mm !important;
+            size: 58mm auto;
+            margin: 0 !important; /* Eliminamos margen de página para controlarlo manualmente */
           }
           
           html, body {
             margin: 0 !important;
             padding: 0 !important;
-            width: 56mm !important;
+            width: 58mm !important; /* Ancho total del papel */
             background-color: white;
           }
 
@@ -61,12 +61,15 @@ export const TicketPrintLayout = ({ transaction }) => {
             position: absolute;
             left: 0;
             top: 0;
-            width: 54mm !important;
-            padding: 2mm !important;
+            width: 100% !important;
+            box-sizing: border-box !important;
             
-            /* -- EDICIÓN QUIRÚRGICA: FUENTE ARIAL, TAMAÑO 8, NEGRITA -- */
+            /* -- AJUSTE DE MARGENES: Padding lateral seguro para evitar recortes -- */
+            padding: 2mm 3.5mm !important; 
+            
+            /* -- FUENTE: Arial, Tamaño 10px (Más grande), Negrita -- */
             font-family: Arial, sans-serif !important; 
-            font-size: 8px !important;
+            font-size: 10px !important;
             font-weight: bold !important;
             
             line-height: 1.2;
@@ -75,15 +78,15 @@ export const TicketPrintLayout = ({ transaction }) => {
 
           .ticket-header {
             text-align: center;
-            font-size: 10px !important; /* Un poco más grande para el título */
-            font-weight: 900 !important; /* Extra bold */
+            font-size: 12px !important; /* Título principal más grande */
+            font-weight: 900 !important;
             margin-bottom: 2mm;
             text-transform: uppercase;
           }
           
           .ticket-subheader {
             text-align: center;
-            font-size: 8px !important;
+            font-size: 10px !important;
             font-weight: bold !important;
             margin-bottom: 0.5mm;
           }
@@ -95,14 +98,13 @@ export const TicketPrintLayout = ({ transaction }) => {
           }
 
           .ticket-info {
-            font-size: 8px !important;
+            font-size: 10px !important;
             font-weight: bold !important;
             margin: 0.5mm 0;
           }
 
-          /* Títulos de sección destacados */
           .ticket-section-title {
-             font-size: 9px !important;
+             font-size: 11px !important;
              font-weight: 900 !important;
              text-transform: uppercase;
              margin: 1mm 0;
@@ -111,9 +113,10 @@ export const TicketPrintLayout = ({ transaction }) => {
           .ticket-item {
             display: flex;
             justify-content: space-between;
+            align-items: flex-start; /* Alineación superior por si el nombre es largo */
             width: 100%;
-            margin: 0.5mm 0;
-            font-size: 8px !important;
+            margin: 0.8mm 0; /* Un poco más de aire entre items */
+            font-size: 10px !important;
             font-weight: bold !important;
           }
 
@@ -121,12 +124,13 @@ export const TicketPrintLayout = ({ transaction }) => {
             flex: 1;
             padding-right: 1mm;
             text-align: left;
-            word-break: break-all; /* Evita desbordes */
+            word-break: break-word; /* Romper palabras largas si es necesario */
           }
 
           .ticket-item-price {
             text-align: right;
             white-space: nowrap;
+            min-width: 15mm; /* Asegurar espacio para el precio */
           }
 
           .ticket-total-row {
@@ -134,19 +138,19 @@ export const TicketPrintLayout = ({ transaction }) => {
             justify-content: space-between;
             width: 100%;
             margin: 0.5mm 0;
-            font-size: 8px !important;
+            font-size: 10px !important;
             font-weight: bold !important;
           }
 
           .ticket-grand-total {
-            font-size: 12px !important; /* Total bien visible */
+            font-size: 14px !important; /* Total bien visible */
             font-weight: 900 !important;
             margin: 2mm 0;
           }
 
           .ticket-footer {
             text-align: center;
-            font-size: 9px !important;
+            font-size: 10px !important;
             font-weight: bold !important;
             margin-top: 3mm;
             text-transform: uppercase;
