@@ -14,7 +14,9 @@ import {
   SlidersHorizontal,
   LayoutGrid,
   List,
-  ScanBarcode
+  ScanBarcode,
+  User, // Nuevo
+  Gift  // Nuevo
 } from 'lucide-react';
 import { PAYMENT_METHODS } from '../data';
 
@@ -39,7 +41,10 @@ export default function POSView({
   posViewMode,
   setPosViewMode,
   gridColumns,
-  setGridColumns
+  setGridColumns,
+  // --- PROPS FIDELIZACIÓN (NUEVOS) ---
+  selectedClient,
+  onOpenClientModal
 }) {
   const [showGridMenu, setShowGridMenu] = useState(false);
 
@@ -77,6 +82,9 @@ export default function POSView({
 
   const subtotal = cart.reduce((t, i) => t + (Number(i.price) || 0) * (Number(i.quantity) || 0), 0);
   const total = calculateTotal();
+
+  // Cálculo de puntos a ganar en esta compra (1 pto cada $100)
+  const pointsToEarn = Math.floor(total / 100);
 
   return (
     <div className="flex h-full overflow-hidden bg-slate-100">
@@ -404,6 +412,44 @@ export default function POSView({
         {/* Footer Totales y Pago */}
         <div className="p-5 bg-slate-50 border-t space-y-4">
           
+          {/* --- SECCIÓN CLIENTE (NUEVO) --- */}
+          <div className="bg-white border border-blue-100 rounded-xl p-3 shadow-sm">
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1">
+                <User size={12} /> Cliente
+              </span>
+              {selectedClient && (
+                <button 
+                  onClick={() => onOpenClientModal()}
+                  className="text-[10px] text-blue-600 font-bold hover:underline"
+                >
+                  Cambiar
+                </button>
+              )}
+            </div>
+
+            {selectedClient ? (
+              <div>
+                <div className="flex justify-between items-center">
+                   <span className="font-bold text-slate-800 text-sm">{selectedClient.name}</span>
+                   <span className="bg-blue-100 text-blue-700 text-[10px] px-1.5 py-0.5 rounded font-bold">{selectedClient.points} pts</span>
+                </div>
+                {/* Puntos a ganar */}
+                <div className="mt-1 flex items-center gap-1 text-xs text-green-600 font-bold">
+                   <Gift size={12} />
+                   <span>+{pointsToEarn} puntos por esta compra</span>
+                </div>
+              </div>
+            ) : (
+              <button 
+                onClick={onOpenClientModal}
+                className="w-full py-2 border-2 border-dashed border-slate-300 rounded-lg text-slate-400 text-xs font-bold hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50 transition-all flex items-center justify-center gap-2"
+              >
+                <User size={14} /> Asignar Cliente / Puntos
+              </button>
+            )}
+          </div>
+
           {/* Selector de Pago */}
           <div className="grid grid-cols-4 gap-2">
             {PAYMENT_METHODS.map((method) => {

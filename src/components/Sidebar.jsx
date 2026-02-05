@@ -8,6 +8,7 @@ import {
   LogOut,
   FileText,
   Tag,
+  Users,
 } from 'lucide-react';
 
 const SidebarButton = ({ onClick, isActive, icon: Icon, label }) => {
@@ -78,6 +79,12 @@ export default function Sidebar({
           isActive={activeTab === 'pos'}
           icon={ShoppingCart}
           label="Venta"
+        />
+        <SidebarButton
+          onClick={() => setActiveTab('clients')}
+          isActive={activeTab === 'clients'}
+          icon={Users}
+          label="Clientes"
         />
         <SidebarButton
           onClick={() => setActiveTab('history')}

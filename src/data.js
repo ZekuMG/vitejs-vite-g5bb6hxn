@@ -5,6 +5,20 @@ export const USERS = {
   seller: { name: 'Vendedor', role: 'seller', avatar: 'VE', password: '4321' },
 };
 
+export const INITIAL_MEMBERS = [
+  {
+    id: '1',
+    memberNumber: 1, // Número de Socio Procedural
+    name: 'Socio Prueba',
+    dni: '12345678', // Campo separado
+    phone: '1122334455', // Campo separado
+    email: 'socio@test.com',
+    extraInfo: 'Socio inicial del sistema',
+    points: 50,
+    history: [],
+  },
+];
+
 export const PAYMENT_METHODS = [
   { id: 'Efectivo', label: 'Efectivo' },
   { id: 'MercadoPago', label: 'Mercado Pago' },

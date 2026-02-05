@@ -33,21 +33,17 @@ export const TicketPrintLayout = ({ transaction }) => {
   const timeFormatted = formatTime24(transaction.time || transaction.timestamp);
 
   // --- LÓGICA DE RECARGO ---
-  // 1. Calcular subtotal real sumando los items (precio base)
   const itemsSubtotal = (transaction.items || []).reduce((acc, item) => {
     const p = Number(item.price) || 0;
     const q = Number(item.qty || item.quantity) || 1;
     return acc + (p * q);
   }, 0);
 
-  // 2. Calcular diferencia (Recargo)
-  // Usamos un pequeño umbral (0.1) para evitar mostrar cosas por errores de redondeo infinitesimales
   let surcharge = 0;
   if (transaction.total > itemsSubtotal + 0.1) {
     surcharge = transaction.total - itemsSubtotal;
   }
 
-  // 3. Descuento (Placeholder logic, si existiera en el futuro)
   const discount = 0; 
 
   return (
@@ -119,13 +115,6 @@ export const TicketPrintLayout = ({ transaction }) => {
 
           .ticket-info span:first-child {
             margin-right: 2mm;
-          }
-
-          .ticket-section-title {
-             font-size: 11px !important;
-             font-weight: 900 !important;
-             text-transform: uppercase;
-             margin: 1mm 0;
           }
 
           .ticket-item {
@@ -207,20 +196,30 @@ export const TicketPrintLayout = ({ transaction }) => {
       </div>
       <hr className="ticket-divider" />
 
-      {/* --- FIDELIZACIÓN --- */}
-      <div className="ticket-info">
-        <span>Nº Cliente:</span>
-        <span></span>
-      </div>
-      <div className="ticket-info">
-        <span>Puntos Sumados:</span>
-        <span></span>
-      </div>
-      <div className="ticket-info">
-        <span>Puntos Total:</span>
-        <span></span>
-      </div>
-      <hr className="ticket-divider" />
+      {/* --- FIDELIZACIÓN (LÓGICA ACTUALIZADA) --- */}
+      {transaction.client && (
+        <>
+          <div className="ticket-info">
+            <span>Cliente:</span>
+            <span>{transaction.client.name}</span>
+          </div>
+          <div className="ticket-info">
+            <span>DNI/Tel:</span>
+            <span>{transaction.client.identifier}</span>
+          </div>
+          <div className="ticket-info">
+            <span>Puntos Ganados:</span>
+            <span>{transaction.pointsEarned || 0}</span>
+          </div>
+          {transaction.client.currentPoints !== undefined && (
+             <div className="ticket-info">
+               <span>Puntos Total:</span>
+               <span>{transaction.client.currentPoints}</span>
+             </div>
+          )}
+          <hr className="ticket-divider" />
+        </>
+      )}
 
       {/* --- PRODUCTOS --- */}
       <div style={{ marginBottom: '1mm' }}>
@@ -246,11 +245,9 @@ export const TicketPrintLayout = ({ transaction }) => {
       {/* --- TOTALES --- */}
       <div className="ticket-total-row">
         <span>Subtotal:</span>
-        {/* Mostramos el subtotal REAL (suma de items) */}
         <span>$ {formatPrice(itemsSubtotal)}</span>
       </div>
       
-      {/* SECCIÓN RECARGO */}
       {surcharge > 0 && (
         <div className="ticket-total-row">
           <span>Recargo (10%):</span>

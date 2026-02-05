@@ -22,6 +22,7 @@ import Sidebar from './components/Sidebar';
 import DashboardView from './views/DashboardView';
 import InventoryView from './views/InventoryView';
 import POSView from './views/POSView';
+import ClientsView from './views/ClientsView';
 import HistoryView from './views/HistoryView';
 import LogsView from './views/LogsView';
 import CategoryManagerView from './views/CategoryManagerView';
@@ -42,14 +43,16 @@ import {
   NotificationModal,
   TicketModal,
   BarcodeNotFoundModal,
-  BarcodeDuplicateModal
+  BarcodeDuplicateModal,
+  ClientSelectionModal
 } from './components/AppModals';
 
 // Layout de Impresión (Invisible)
 import { TicketPrintLayout } from './components/TicketPrintLayout';
 
-// Hook del Escáner
+// Hooks
 import { useBarcodeScanner } from './hooks/useBarcodeScanner';
+import { useClients } from './hooks/useClients';
 
 export default function PartySupplyApp() {
   // ==========================================
@@ -86,6 +89,9 @@ export default function PartySupplyApp() {
   const [closingTime, setClosingTime] = useState(() =>
     getInitialState('party_closingTime', '21:00')
   );
+
+  // --- HOOK DE SOCIOS ---
+  const { members, addMember, addPoints } = useClients();
 
   // ==========================================
   // 2. ESTADOS DE SESIÓN Y UI
@@ -137,6 +143,10 @@ export default function PartySupplyApp() {
   const [barcodeDuplicateModal, setBarcodeDuplicateModal] = useState({ isOpen: false, existingProduct: null, newBarcode: '' });
   const [pendingBarcodeForNewProduct, setPendingBarcodeForNewProduct] = useState('');
 
+  // --- NUEVOS ESTADOS: CLIENTE EN POS ---
+  const [isClientModalOpen, setIsClientModalOpen] = useState(false);
+  const [posSelectedClient, setPosSelectedClient] = useState(null);
+
   // Inputs temporales
   const [newItem, setNewItem] = useState({
     title: '',
@@ -159,7 +169,7 @@ export default function PartySupplyApp() {
   const [inventorySearch, setInventorySearch] = useState('');
   const [posSearch, setPosSearch] = useState('');
   
-  // -- NUEVOS ESTADOS PERSISTENTES PARA POS (EDICIÓN QUIRÚRGICA) --
+  // -- NUEVOS ESTADOS PERSISTENTES PARA POS --
   const [posSelectedCategory, setPosSelectedCategory] = useState('Todas');
   const [posViewMode, setPosViewMode] = useState('grid');
   const [posGridColumns, setPosGridColumns] = useState(4);
@@ -270,7 +280,6 @@ export default function PartySupplyApp() {
   // 7. LÓGICA DE NEGOCIO
   // ==========================================
 
-  // Ventas (Funciones definidas antes para usarse en el scanner)
   const addToCart = (item) => {
     if (item.stock === 0) return;
     const existing = cart.find((c) => c.id === item.id);
@@ -285,15 +294,12 @@ export default function PartySupplyApp() {
     }
   };
 
-  // --- LÓGICA DEL ESCÁNER DE CÓDIGO DE BARRAS ---
   const handleBarcodeScan = (scannedCode, wasInInput) => {
-    // Buscar producto por código de barras
     const product = inventory.find(
       (p) => String(p.barcode) === scannedCode
     );
 
     if (activeTab === 'pos' && !isRegisterClosed) {
-      // --- MODO POS: Agregar al carrito ---
       if (product) {
         if (product.stock === 0) {
           playBeep(false);
@@ -301,7 +307,6 @@ export default function PartySupplyApp() {
           return;
         }
         
-        // Verificar si ya está en el carrito y supera el stock
         const inCart = cart.find(c => c.id === product.id);
         if (inCart && inCart.quantity >= product.stock) {
           playBeep(false);
@@ -317,36 +322,29 @@ export default function PartySupplyApp() {
         setBarcodeNotFoundModal({ isOpen: true, code: scannedCode });
       }
     } else if (activeTab === 'inventory') {
-      // --- MODO INVENTARIO: Poner código en el buscador ---
       playBeep(true);
       setInventorySearch(scannedCode);
       
       if (!product) {
-        // Si no existe, mostrar modal para agregar
         setTimeout(() => {
           setBarcodeNotFoundModal({ isOpen: true, code: scannedCode });
-        }, 300); // Pequeño delay para que se vea la búsqueda
+        }, 300);
       }
     }
   };
 
-  // Callback para limpiar input cuando se escanea
   const handleInputScan = (scannedCode) => {
-    // Limpiar el input de búsqueda según la pestaña activa
     if (activeTab === 'pos') {
-      setPosSearch(''); // Limpiar búsqueda POS
+      setPosSearch(''); 
     }
-    // En inventario NO limpiamos porque queremos que quede el código
   };
 
-  // Activar escáner solo en POS e Inventario
   useBarcodeScanner({
     isEnabled: (activeTab === 'pos' && !isRegisterClosed) || activeTab === 'inventory',
     onScan: handleBarcodeScan,
     onInputScan: handleInputScan
   });
 
-  // Handler: Cerrar modal "No encontrado" y abrir modal de nuevo producto
   const handleAddProductFromBarcode = (barcode) => {
     setBarcodeNotFoundModal({ isOpen: false, code: '' });
     setPendingBarcodeForNewProduct(barcode);
@@ -363,7 +361,6 @@ export default function PartySupplyApp() {
     setIsModalOpen(true);
   };
 
-  // Handler: Código de barras duplicado detectado
   const handleDuplicateBarcodeDetected = (existingProduct, newBarcode) => {
     setBarcodeDuplicateModal({
       isOpen: true,
@@ -372,15 +369,11 @@ export default function PartySupplyApp() {
     });
   };
 
-  // Handler: Reemplazar código de barras (quitar del producto anterior)
   const handleReplaceDuplicateBarcode = () => {
     const { existingProduct } = barcodeDuplicateModal;
-    
-    // Quitar barcode del producto existente
     setInventory(inventory.map(p => 
       p.id === existingProduct.id ? { ...p, barcode: '' } : p
     ));
-    
     setBarcodeDuplicateModal({ isOpen: false, existingProduct: null, newBarcode: '' });
     showNotification('info', 'Código Reemplazado', `Se quitó el código de "${existingProduct.title}".`);
   };
@@ -438,6 +431,7 @@ export default function PartySupplyApp() {
   const handleLogout = () => {
     setCurrentUser(null);
     setCart([]);
+    setPosSelectedClient(null);
   };
 
   const handleImageUpload = (e, isEditing = false) => {
@@ -459,14 +453,10 @@ export default function PartySupplyApp() {
     }
   };
 
-  // --- FUNCIONES DE IMPRESIÓN Y VISUALIZACIÓN ---
-  
-  // Abre el modal para ver el ticket
   const handleViewTicket = (tx) => {
     setTicketToView(tx);
   };
 
-  // Función inteligente: Web vs App de Escritorio
   const handlePrintTicket = () => {
     if (window.electronAPI && window.electronAPI.printSilent) {
       window.electronAPI.printSilent();
@@ -535,7 +525,6 @@ export default function PartySupplyApp() {
     showNotification('success', 'Horario Guardado', 'La hora de cierre se ha actualizado.');
   };
 
-  // Categorías
   const handleAddCategoryFromView = (name) => {
     if (name && !categories.includes(name)) {
       setCategories([...categories, name]);
@@ -561,7 +550,6 @@ export default function PartySupplyApp() {
     }
   };
 
-  // CRUD Productos
   const handleAddItem = (e) => {
     e.preventDefault();
     if (newItem.categories.length === 0) {
@@ -597,7 +585,6 @@ export default function PartySupplyApp() {
     showNotification('success', 'Producto Agregado', 'El producto se guardó en el inventario.');
   };
 
-  // --- FUNCIÓN CORREGIDA: GUARDAR EDICIÓN Y REGISTRAR CAMBIOS ---
   const saveEditProduct = (e) => {
     e.preventDefault();
     if (!editingProduct) return;
@@ -609,7 +596,6 @@ export default function PartySupplyApp() {
       return;
     }
 
-    // 1. Detectar cambios (Original vs Nuevo)
     const original = inventory.find((p) => p.id === editingProduct.id);
     const changes = {};
     if (original) {
@@ -639,13 +625,12 @@ export default function PartySupplyApp() {
       )
     );
     
-    // 2. Guardar Log con los cambios detectados
     addLog(
       'Edición Producto', 
       { 
         productId: editingProduct.id, 
         title: editingProduct.title,
-        changes: changes // ¡Ahora sí enviamos los cambios!
+        changes: changes
       }, 
       editReason
     );
@@ -675,7 +660,6 @@ export default function PartySupplyApp() {
     }
   };
 
-  // Ventas
   const updateCartItemQty = (id, newQty) => {
     const qty = parseInt(newQty);
     if (isNaN(qty) || qty < 1) return;
@@ -688,7 +672,7 @@ export default function PartySupplyApp() {
   };
   const removeFromCart = (id) => setCart(cart.filter((c) => c.id !== id));
 
-  // --- CHECKOUT (CORREGIDO: Ahora guarda los items en el log) ---
+  // --- CHECKOUT PRINCIPAL (Modificado para soportar flujo de invitado) ---
   const handleCheckout = () => {
     const total = calculateTotal();
     
@@ -700,6 +684,7 @@ export default function PartySupplyApp() {
       showNotification('error', 'Error de Stock', 'Algunos productos superan el stock disponible.');
       return;
     }
+
     setInventory(
       inventory.map((p) => {
         const c = cart.find((x) => x.id === p.id);
@@ -707,15 +692,35 @@ export default function PartySupplyApp() {
       })
     );
     
-    // --- ID GENERATOR (000001) ---
+    // --- ID GENERATOR ---
     const validIds = transactions
       .map((t) => (typeof t.id === 'number' ? t.id : null))
       .filter((id) => id !== null);
 
     const maxId = validIds.length > 0 ? Math.max(...validIds) : 0;
+    const nextId = maxId + 1;
     
+    // --- FIDELIZACIÓN ---
+    let pointsEarned = 0;
+    let clientSnapshot = null;
+
+    if (posSelectedClient) {
+      // Sumamos puntos y obtenemos el nuevo total (podría venir del hook o recalcularse)
+      // Nota: addPoints actualiza el estado 'members'. Para el snapshot usamos el dato actualizado en teoría.
+      // Simplificación: Ejecutamos addPoints, y asumimos que el nuevo saldo es points + ganados.
+      pointsEarned = addPoints(posSelectedClient.id, total, nextId); // Pasamos nextId como orderId
+      
+      clientSnapshot = {
+        id: posSelectedClient.id,
+        memberNumber: posSelectedClient.memberNumber, // Guardamos el N° Socio
+        name: posSelectedClient.name,
+        identifier: posSelectedClient.dni || posSelectedClient.phone, // Para imprimir en ticket viejo si hace falta
+        currentPoints: (posSelectedClient.points || 0) + pointsEarned
+      };
+    }
+
     const tx = {
-      id: maxId + 1,
+      id: nextId,
       date: new Date().toLocaleDateString('es-AR'),
       time: new Date().toLocaleTimeString('es-AR', {
         hour: '2-digit',
@@ -733,18 +738,20 @@ export default function PartySupplyApp() {
         qty: Number(i.quantity) || 0,
       })),
       status: 'completed',
+      client: clientSnapshot, // Guardamos socio
+      pointsEarned: pointsEarned
     };
     
     setTransactions([tx, ...transactions]);
     
-    // --- AQUÍ ESTABA EL ERROR EN VENTA ---
     addLog(
       'Venta Realizada',
       { 
         transactionId: tx.id, 
         total: total,
-        items: tx.items, // ¡Agregado! Ahora el log sabe qué productos se vendieron
-        payment: selectedPayment
+        items: tx.items, 
+        payment: selectedPayment,
+        client: clientSnapshot ? clientSnapshot.name : 'Invitado'
       },
       'Venta regular'
     );
@@ -753,6 +760,7 @@ export default function PartySupplyApp() {
     setCart([]);
     setInstallments(1);
     setPosSearch('');
+    setPosSelectedClient(null); // Limpiar cliente seleccionado
   };
 
   const handleDeleteTransaction = (tx) => {
@@ -783,7 +791,6 @@ export default function PartySupplyApp() {
           t.id === tx.id ? { ...t, status: 'voided' } : t
         )
       );
-      // En la anulación también conviene guardar items para saber qué se devolvió
       addLog(
         'Venta Anulada',
         { 
@@ -799,7 +806,6 @@ export default function PartySupplyApp() {
     setTransactionToRefund(null);
   };
 
-  // Helper para modificar transacciones
   const addTxItem = (product) => {
     if (!editingTransaction) return;
     const existingItemIndex = editingTransaction.items.findIndex(
@@ -872,16 +878,13 @@ export default function PartySupplyApp() {
     });
   };
 
-  // --- FUNCIÓN CORREGIDA PARA CALCULAR Y GUARDAR CAMBIOS ---
   const handleSaveEditedTransaction = (e) => {
     e.preventDefault();
     if (!editingTransaction) return;
     
-    // 1. Encontrar la transacción original para comparar
     const originalTx = transactions.find((t) => t.id === editingTransaction.id);
     if (!originalTx) return;
 
-    // 2. Calcular diferencias Generales (Total y Pago)
     const changes = {};
     if (originalTx.total !== editingTransaction.total) {
         changes.total = { old: originalTx.total, new: editingTransaction.total };
@@ -890,19 +893,14 @@ export default function PartySupplyApp() {
         changes.payment = { old: originalTx.payment, new: editingTransaction.payment };
     }
 
-    // 3. Calcular diferencias de Productos (Add/Remove/Qty)
     const productChanges = [];
-    // Creamos mapas para búsqueda rápida
     const oldItemsMap = new Map(originalTx.items.map(i => [i.id || i.productId, i]));
-    // Nota: editingTransaction puede tener items sin ID real si son nuevos, usamos una lógica mixta
     
-    // Detectar cambios o nuevos items
     editingTransaction.items.forEach(newItem => {
         const itemId = newItem.id || newItem.productId;
         const oldItem = oldItemsMap.get(itemId);
         
         if (!oldItem) {
-            // Nuevo item agregado
             productChanges.push({
                 title: newItem.title,
                 oldQty: 0,
@@ -910,7 +908,6 @@ export default function PartySupplyApp() {
                 diff: newItem.qty
             });
         } else if (oldItem.qty !== newItem.qty) {
-            // Cantidad cambiada
             productChanges.push({
                 title: newItem.title,
                 oldQty: oldItem.qty,
@@ -918,11 +915,9 @@ export default function PartySupplyApp() {
                 diff: newItem.qty - oldItem.qty
             });
         }
-        // Eliminamos del mapa los procesados para saber cuáles quedaron (borrados)
         if (oldItem) oldItemsMap.delete(itemId);
     });
 
-    // Los que quedaron en el mapa fueron eliminados
     oldItemsMap.forEach(oldItem => {
         productChanges.push({
             title: oldItem.title,
@@ -932,14 +927,11 @@ export default function PartySupplyApp() {
         });
     });
 
-    // 4. Lógica de Stock (Mantenemos tu lógica original de reversión y aplicación)
     let tempInventory = [...inventory];
-    // Revertir stock original
     tempInventory = tempInventory.map((prod) => {
       const originalItem = originalTx.items.find((i) => i.id === prod.id);
       return originalItem ? { ...prod, stock: prod.stock + (Number(originalItem.qty) || 0) } : prod;
     });
-    // Validar nuevo stock
     const stockErrors = [];
     editingTransaction.items.forEach((newItem) => {
       const prod = tempInventory.find((p) => p.id === newItem.id);
@@ -951,26 +943,23 @@ export default function PartySupplyApp() {
       showNotification('error', 'Stock Insuficiente', `Error con: ${stockErrors.join('\n- ')}`);
       return;
     }
-    // Aplicar nuevo stock
     tempInventory = tempInventory.map((prod) => {
       const newItem = editingTransaction.items.find((i) => i.id === prod.id);
       return newItem ? { ...prod, stock: prod.stock - (Number(newItem.qty) || 0) } : prod;
     });
 
-    // 5. Guardar todo
     setInventory(tempInventory);
     setTransactions(
       transactions.map((t) => (t.id === editingTransaction.id ? editingTransaction : t))
     );
 
-    // GUARDAR EL LOG COMPLETO CON DETALLES DE CAMBIOS
     addLog(
       'Modificación Pedido', 
       { 
         transactionId: editingTransaction.id,
-        changes: changes,                // Cambios monetarios
-        productChanges: productChanges,  // Cambios de productos
-        itemsSnapshot: editingTransaction.items // Estado final
+        changes: changes,
+        productChanges: productChanges,
+        itemsSnapshot: editingTransaction.items
       }, 
       editReason
     );
@@ -991,40 +980,18 @@ export default function PartySupplyApp() {
                 <PartyPopper className="text-white" size={32} />
               </div>
             </div>
-            <h1 className="text-lg font-bold text-slate-800 mb-1">
-              PartyManager
-            </h1>
+            <h1 className="text-lg font-bold text-slate-800 mb-1">PartyManager</h1>
             <p className="text-slate-500 text-xs mb-6">Selecciona tu usuario</p>
             <div className="space-y-3">
-              <button
-                onClick={() => handleSelectRole('admin')}
-                className="w-full flex items-center gap-3 p-3 border rounded-xl hover:bg-slate-50 transition-colors group"
-              >
-                <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-xs">
-                  DU
-                </div>
-                <div className="text-left flex-1">
-                  <p className="font-bold text-slate-800 text-sm">Dueño</p>
-                </div>
-                <ChevronRight
-                  size={16}
-                  className="text-slate-300 group-hover:text-slate-500"
-                />
+              <button onClick={() => handleSelectRole('admin')} className="w-full flex items-center gap-3 p-3 border rounded-xl hover:bg-slate-50 transition-colors group">
+                <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-xs">DU</div>
+                <div className="text-left flex-1"><p className="font-bold text-slate-800 text-sm">Dueño</p></div>
+                <ChevronRight size={16} className="text-slate-300 group-hover:text-slate-500" />
               </button>
-              <button
-                onClick={() => handleSelectRole('seller')}
-                className="w-full flex items-center gap-3 p-3 border rounded-xl hover:bg-slate-50 transition-colors group"
-              >
-                <div className="w-8 h-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center font-bold text-xs">
-                  VE
-                </div>
-                <div className="text-left flex-1">
-                  <p className="font-bold text-slate-800 text-sm">Vendedor</p>
-                </div>
-                <ChevronRight
-                  size={16}
-                  className="text-slate-300 group-hover:text-slate-500"
-                />
+              <button onClick={() => handleSelectRole('seller')} className="w-full flex items-center gap-3 p-3 border rounded-xl hover:bg-slate-50 transition-colors group">
+                <div className="w-8 h-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center font-bold text-xs">VE</div>
+                <div className="text-left flex-1"><p className="font-bold text-slate-800 text-sm">Vendedor</p></div>
+                <ChevronRight size={16} className="text-slate-300 group-hover:text-slate-500" />
               </button>
             </div>
           </div>
@@ -1037,49 +1004,20 @@ export default function PartySupplyApp() {
         <div className="flex h-screen items-center justify-center bg-slate-100">
           <div className="bg-white p-6 rounded-xl shadow-xl w-full max-w-xs text-center border">
             <div className="flex justify-between items-center mb-6">
-              <button
-                onClick={() => setLoginStep('select')}
-                className="text-slate-400 hover:text-slate-600"
-              >
-                <ArrowLeft size={20} />
-              </button>
-              <h1 className="text-lg font-bold text-slate-800">
-                Iniciar Sesión
-              </h1>
+              <button onClick={() => setLoginStep('select')} className="text-slate-400 hover:text-slate-600"><ArrowLeft size={20} /></button>
+              <h1 className="text-lg font-bold text-slate-800">Iniciar Sesión</h1>
               <div className="w-5"></div>
             </div>
             <div className="mb-6 flex flex-col items-center">
-              <div
-                className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-sm mb-2 ${
-                  user.role === 'admin'
-                    ? 'bg-blue-100 text-blue-600'
-                    : 'bg-green-100 text-green-600'
-                }`}
-              >
-                {user.avatar}
-              </div>
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-sm mb-2 ${user.role === 'admin' ? 'bg-blue-100 text-blue-600' : 'bg-green-100 text-green-600'}`}>{user.avatar}</div>
               <p className="font-bold text-slate-700">{user.name}</p>
             </div>
             <form onSubmit={handleSubmitLogin} className="space-y-4">
               <div>
-                <input
-                  autoFocus
-                  type="password"
-                  placeholder="Contraseña"
-                  className="w-full px-4 py-3 border border-slate-300 rounded-xl text-center text-lg tracking-widest focus:ring-2 focus:ring-fuchsia-500 focus:border-fuchsia-500 outline-none bg-white text-slate-800 placeholder:text-slate-400"
-                  value={passwordInput}
-                  onChange={(e) => setPasswordInput(e.target.value)}
-                />
-                {loginError && (
-                  <p className="text-xs text-red-500 mt-2">{loginError}</p>
-                )}
+                <input autoFocus type="password" placeholder="Contraseña" className="w-full px-4 py-3 border border-slate-300 rounded-xl text-center text-lg tracking-widest focus:ring-2 focus:ring-fuchsia-500 focus:border-fuchsia-500 outline-none bg-white text-slate-800 placeholder:text-slate-400" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} />
+                {loginError && (<p className="text-xs text-red-500 mt-2">{loginError}</p>)}
               </div>
-              <button
-                type="submit"
-                className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800 transition-colors"
-              >
-                Ingresar
-              </button>
+              <button type="submit" className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800 transition-colors">Ingresar</button>
             </form>
           </div>
         </div>
@@ -1090,457 +1028,68 @@ export default function PartySupplyApp() {
   // --- MAIN LAYOUT ---
   return (
     <div className="flex h-screen bg-slate-100 font-sans text-slate-900 text-sm overflow-hidden">
-      <Sidebar
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        currentUser={currentUser}
-        onLogout={handleLogout}
-      />
+      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} currentUser={currentUser} onLogout={handleLogout} />
       <div className="flex-1 flex flex-col h-full overflow-hidden">
         <header className="bg-white border-b h-14 flex items-center justify-between px-6 shadow-sm z-10 shrink-0">
           <div className="flex items-center gap-3">
             <div>
               <h2 className="text-base font-bold text-slate-800 uppercase tracking-wide">
-                {activeTab === 'pos'
-                  ? 'Punto de Venta'
-                  : activeTab === 'dashboard'
-                  ? 'Control de Caja'
-                  : activeTab === 'history'
-                  ? 'Historial de Transacciones'
-                  : activeTab === 'logs'
-                  ? 'Registro de Acciones'
-                  : activeTab === 'categories'
-                  ? 'Categorías'
-                  : 'Gestión de Stock'}
+                {activeTab === 'pos' ? 'Punto de Venta' : activeTab === 'dashboard' ? 'Control de Caja' : activeTab === 'clients' ? 'Gestión de Socios' : activeTab === 'history' ? 'Historial de Transacciones' : activeTab === 'logs' ? 'Registro de Acciones' : activeTab === 'categories' ? 'Categorías' : 'Gestión de Stock'}
               </h2>
-              <p className="text-[11px] text-slate-400">
-                {currentTime.toLocaleDateString('es-AR', {
-                  weekday: 'long',
-                  day: 'numeric',
-                  month: 'long',
-                  year: 'numeric',
-                })}{' '}
-                •{' '}
-                <span className="font-bold text-slate-500">
-                  {currentTime.toLocaleTimeString('es-AR', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    hour12: false,
-                  })}{' '}
-                  hs
-                </span>
-              </p>
+              <p className="text-[11px] text-slate-400">{currentTime.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} • <span className="font-bold text-slate-500">{currentTime.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false })} hs</span></p>
             </div>
           </div>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
-              <button
-                onClick={
-                  currentUser.role === 'admin'
-                    ? toggleRegisterStatus
-                    : undefined
-                }
-                className={`flex items-center gap-2 px-3 py-1.5 rounded border transition-colors ${
-                  isRegisterClosed
-                    ? 'bg-red-50 border-red-200 text-red-700'
-                    : 'bg-green-50 border-green-200 text-green-700'
-                } ${
-                  currentUser.role === 'admin'
-                    ? 'hover:opacity-80 cursor-pointer'
-                    : 'cursor-default'
-                }`}
-                title={
-                  currentUser.role !== 'admin'
-                    ? 'Solo el Dueño puede cambiar el estado de la caja'
-                    : ''
-                }
-              >
-                <Lock size={14} />
-                <span className="text-xs font-bold">
-                  {isRegisterClosed ? 'CAJA CERRADA' : 'CAJA ABIERTA'}
-                </span>
-              </button>
-              {!isRegisterClosed && closingTime && (
-                <div className="flex items-center gap-1 px-2 py-1 bg-amber-50 border border-amber-200 rounded text-amber-700">
-                  <Clock size={12} />
-                  <span className="text-[10px] font-bold">
-                    Cierre: {closingTime}
-                  </span>
-                </div>
-              )}
+              <button onClick={currentUser.role === 'admin' ? toggleRegisterStatus : undefined} className={`flex items-center gap-2 px-3 py-1.5 rounded border transition-colors ${isRegisterClosed ? 'bg-red-50 border-red-200 text-red-700' : 'bg-green-50 border-green-200 text-green-700'} ${currentUser.role === 'admin' ? 'hover:opacity-80 cursor-pointer' : 'cursor-default'}`} title={currentUser.role !== 'admin' ? 'Solo el Dueño puede cambiar el estado de la caja' : ''}><Lock size={14} /><span className="text-xs font-bold">{isRegisterClosed ? 'CAJA CERRADA' : 'CAJA ABIERTA'}</span></button>
+              {!isRegisterClosed && closingTime && (<div className="flex items-center gap-1 px-2 py-1 bg-amber-50 border border-amber-200 rounded text-amber-700"><Clock size={12} /><span className="text-[10px] font-bold">Cierre: {closingTime}</span></div>)}
             </div>
-            <div className="text-right hidden sm:block">
-              <p className="text-xs font-bold text-slate-700">
-                {currentUser.name}
-              </p>
-              <span
-                className={`text-[10px] px-2 py-0.5 rounded font-bold ${
-                  currentUser.role === 'admin'
-                    ? 'bg-blue-100 text-blue-700'
-                    : 'bg-green-100 text-green-700'
-                }`}
-              >
-                {currentUser.role === 'admin' ? 'DUEÑO' : 'VENDEDOR'}
-              </span>
-            </div>
+            <div className="text-right hidden sm:block"><p className="text-xs font-bold text-slate-700">{currentUser.name}</p><span className={`text-[10px] px-2 py-0.5 rounded font-bold ${currentUser.role === 'admin' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>{currentUser.role === 'admin' ? 'DUEÑO' : 'VENDEDOR'}</span></div>
           </div>
         </header>
         <main className="flex-1 overflow-y-auto p-4 bg-slate-100">
-          {activeTab === 'dashboard' && (
-            <DashboardView
-              openingBalance={openingBalance}
-              totalSales={totalSales}
-              salesCount={salesCount}
-              currentUser={currentUser}
-              setTempOpeningBalance={setTempOpeningBalance}
-              setIsOpeningBalanceModalOpen={setIsOpeningBalanceModalOpen}
-              transactions={validTransactions}
-              dailyLogs={dailyLogs}
-              inventory={inventory}
-            />
-          )}
-          {activeTab === 'inventory' && (
-            <InventoryView
-              inventory={inventory}
-              categories={categories}
-              currentUser={currentUser}
-              inventoryViewMode={inventoryViewMode}
-              setInventoryViewMode={setInventoryViewMode}
-              gridColumns={inventoryGridColumns}
-              setGridColumns={setInventoryGridColumns}
-              inventorySearch={inventorySearch}
-              setInventorySearch={setInventorySearch}
-              inventoryCategoryFilter={inventoryCategoryFilter}
-              setInventoryCategoryFilter={setInventoryCategoryFilter}
-              setIsModalOpen={setIsModalOpen}
-              setEditingProduct={(prod) => {
-                setEditingProduct(prod);
-                setEditReason('');
-              }}
-              handleDeleteProduct={handleDeleteProductRequest}
-              setSelectedImage={setSelectedImage}
-              setIsImageModalOpen={setIsImageModalOpen}
-            />
-          )}
-          {activeTab === 'pos' &&
-            (isRegisterClosed ? (
-              <div className="h-full flex flex-col items-center justify-center text-slate-400">
-                <Lock size={64} className="mb-4 text-slate-300" />
-                <h3 className="text-xl font-bold text-slate-600">
-                  Caja Cerrada
-                </h3>
-                {currentUser.role === 'admin' ? (
-                  <>
-                    <p className="mb-6">
-                      Debes abrir la caja para realizar ventas.
-                    </p>
-                    <button
-                      onClick={toggleRegisterStatus}
-                      className="bg-green-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-green-700"
-                    >
-                      Abrir Caja
-                    </button>
-                  </>
-                ) : (
-                  <p className="mb-6 text-center">
-                    El Dueño debe abrir la caja para realizar ventas.
-                  </p>
-                )}
-              </div>
-            ) : (
-              <POSView
-                inventory={inventory}
-                categories={categories}
-                addToCart={addToCart}
-                cart={cart}
-                removeFromCart={removeFromCart}
-                updateCartItemQty={updateCartItemQty}
-                selectedPayment={selectedPayment}
-                setSelectedPayment={setSelectedPayment}
-                installments={installments}
-                setInstallments={setInstallments}
-                calculateTotal={calculateTotal}
-                handleCheckout={handleCheckout}
-                posSearch={posSearch}
-                setPosSearch={setPosSearch}
-                // --- NUEVOS PROPS PERSISTENTES ---
-                selectedCategory={posSelectedCategory}
-                setSelectedCategory={setPosSelectedCategory}
-                posViewMode={posViewMode}
-                setPosViewMode={setPosViewMode}
-                gridColumns={posGridColumns}
-                setGridColumns={setPosGridColumns}
-              />
-            ))}
-          {activeTab === 'history' && (
-            <HistoryView
-              transactions={transactions}
-              dailyLogs={dailyLogs}
-              inventory={inventory}
-              currentUser={currentUser}
-              showNotification={showNotification}
-              onViewTicket={handleViewTicket}
-              onDeleteTransaction={handleDeleteTransaction}
-              onEditTransaction={(tx) => {
-                const safeTx = JSON.parse(JSON.stringify(tx));
-                safeTx.items = safeTx.items.map((i) => ({
-                  ...i,
-                  qty: Number(i.qty) || 0,
-                  price: Number(i.price) || 0,
-                }));
-                setEditingTransaction(safeTx);
-                setTransactionSearch('');
-                setEditReason('');
-              }}
-              setTransactions={setTransactions}
-              setDailyLogs={setDailyLogs}
-            />
-          )}
-          {activeTab === 'logs' && currentUser.role === 'admin' && (
-            <LogsView
-              dailyLogs={dailyLogs}
-              setDailyLogs={setDailyLogs}
-              inventory={inventory}
-            />
-          )}
-          {activeTab === 'categories' && currentUser.role === 'admin' && (
-            <CategoryManagerView
-              categories={categories}
-              inventory={inventory}
-              onAddCategory={handleAddCategoryFromView}
-              onDeleteCategory={handleDeleteCategoryFromView}
-              onEditCategory={(oldName, newName) => {
-                if (
-                  newName &&
-                  newName !== oldName &&
-                  !categories.includes(newName)
-                ) {
-                  setCategories(
-                    categories.map((c) => (c === oldName ? newName : c))
-                  );
-                  setInventory(
-                    inventory.map((p) => {
-                      let updatedCats = p.categories
-                        ? [...p.categories]
-                        : p.category
-                        ? [p.category]
-                        : [];
-                      if (updatedCats.includes(oldName)) {
-                        updatedCats = updatedCats.map((c) =>
-                          c === oldName ? newName : c
-                        );
-                      }
-                      const updatedCat =
-                        p.category === oldName ? newName : p.category;
-
-                      return {
-                        ...p,
-                        category: updatedCat,
-                        categories: updatedCats,
-                      };
-                    })
-                  );
-                  addLog('Categoría', {
-                    name: newName,
-                    type: 'edit',
-                    oldName: oldName,
-                  });
-                  showNotification('success', 'Categoría Editada', 'Nombre actualizado correctamente.');
-                }
-              }}
-              onBatchUpdateProductCategory={(changes) => {
-                if (!changes || changes.length === 0) return;
-
-                let updatedInventory = [...inventory];
-                const logDetails = [];
-
-                changes.forEach(({ productId, categoryName, action }) => {
-                  updatedInventory = updatedInventory.map((p) => {
-                    if (p.id === productId) {
-                      const currentCats = Array.isArray(p.categories)
-                        ? [...p.categories]
-                        : p.category
-                        ? [p.category]
-                        : [];
-                      let newCats = [...currentCats];
-
-                      if (action === 'add') {
-                        if (!newCats.includes(categoryName))
-                          newCats.push(categoryName);
-                      } else if (action === 'remove') {
-                        newCats = newCats.filter((c) => c !== categoryName);
-                      }
-
-                      return {
-                        ...p,
-                        categories: newCats,
-                        category: newCats.length > 0 ? newCats[0] : '',
-                      };
-                    }
-                    return p;
-                  });
-                  logDetails.push(
-                    `${
-                      action === 'add' ? 'Agregado a' : 'Quitado de'
-                    } ${categoryName} (Prod: ${productId})`
-                  );
-                });
-
-                setInventory(updatedInventory);
-                addLog('Edición Masiva Categorías', {
-                  count: changes.length,
-                  details: logDetails,
-                });
-                showNotification('success', 'Edición Masiva', `Se actualizaron ${changes.length} productos.`);
-              }}
-              onUpdateProductCategory={() => {}}
-            />
-          )}
+          {activeTab === 'dashboard' && (<DashboardView openingBalance={openingBalance} totalSales={totalSales} salesCount={salesCount} currentUser={currentUser} setTempOpeningBalance={setTempOpeningBalance} setIsOpeningBalanceModalOpen={setIsOpeningBalanceModalOpen} transactions={validTransactions} dailyLogs={dailyLogs} inventory={inventory} />)}
+          {activeTab === 'inventory' && (<InventoryView inventory={inventory} categories={categories} currentUser={currentUser} inventoryViewMode={inventoryViewMode} setInventoryViewMode={setInventoryViewMode} gridColumns={inventoryGridColumns} setGridColumns={setInventoryGridColumns} inventorySearch={inventorySearch} setInventorySearch={setInventorySearch} inventoryCategoryFilter={inventoryCategoryFilter} setInventoryCategoryFilter={setInventoryCategoryFilter} setIsModalOpen={setIsModalOpen} setEditingProduct={(prod) => { setEditingProduct(prod); setEditReason(''); }} handleDeleteProduct={handleDeleteProductRequest} setSelectedImage={setSelectedImage} setIsImageModalOpen={setIsImageModalOpen} />)}
+          {activeTab === 'pos' && (isRegisterClosed ? (<div className="h-full flex flex-col items-center justify-center text-slate-400"><Lock size={64} className="mb-4 text-slate-300" /><h3 className="text-xl font-bold text-slate-600">Caja Cerrada</h3>{currentUser.role === 'admin' ? (<><p className="mb-6">Debes abrir la caja para realizar ventas.</p><button onClick={toggleRegisterStatus} className="bg-green-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-green-700">Abrir Caja</button></>) : (<p className="mb-6 text-center">El Dueño debe abrir la caja para realizar ventas.</p>)}</div>) : (<POSView inventory={inventory} categories={categories} addToCart={addToCart} cart={cart} removeFromCart={removeFromCart} updateCartItemQty={updateCartItemQty} selectedPayment={selectedPayment} setSelectedPayment={setSelectedPayment} installments={installments} setInstallments={setInstallments} calculateTotal={calculateTotal} handleCheckout={handleCheckout} posSearch={posSearch} setPosSearch={setPosSearch} selectedCategory={posSelectedCategory} setSelectedCategory={setPosSelectedCategory} posViewMode={posViewMode} setPosViewMode={setPosViewMode} gridColumns={posGridColumns} setGridColumns={setPosGridColumns} selectedClient={posSelectedClient} onOpenClientModal={() => setIsClientModalOpen(true)} />))}
+          {activeTab === 'clients' && (<ClientsView onViewTicket={handleViewTicket} />)}
+          {activeTab === 'history' && (<HistoryView transactions={transactions} dailyLogs={dailyLogs} inventory={inventory} currentUser={currentUser} showNotification={showNotification} onViewTicket={handleViewTicket} onDeleteTransaction={handleDeleteTransaction} onEditTransaction={(tx) => { const safeTx = JSON.parse(JSON.stringify(tx)); safeTx.items = safeTx.items.map((i) => ({ ...i, qty: Number(i.qty) || 0, price: Number(i.price) || 0, })); setEditingTransaction(safeTx); setTransactionSearch(''); setEditReason(''); }} setTransactions={setTransactions} setDailyLogs={setDailyLogs} />)}
+          {activeTab === 'logs' && currentUser.role === 'admin' && (<LogsView dailyLogs={dailyLogs} setDailyLogs={setDailyLogs} inventory={inventory} />)}
+          {activeTab === 'categories' && currentUser.role === 'admin' && (<CategoryManagerView categories={categories} inventory={inventory} onAddCategory={handleAddCategoryFromView} onDeleteCategory={handleDeleteCategoryFromView} onEditCategory={(oldName, newName) => { if (newName && newName !== oldName && !categories.includes(newName)) { setCategories(categories.map((c) => (c === oldName ? newName : c))); setInventory(inventory.map((p) => { let updatedCats = p.categories ? [...p.categories] : p.category ? [p.category] : []; if (updatedCats.includes(oldName)) { updatedCats = updatedCats.map((c) => c === oldName ? newName : c); } const updatedCat = p.category === oldName ? newName : p.category; return { ...p, category: updatedCat, categories: updatedCats, }; })); addLog('Categoría', { name: newName, type: 'edit', oldName: oldName, }); showNotification('success', 'Categoría Editada', 'Nombre actualizado correctamente.'); } }} onBatchUpdateProductCategory={(changes) => { if (!changes || changes.length === 0) return; let updatedInventory = [...inventory]; const logDetails = []; changes.forEach(({ productId, categoryName, action }) => { updatedInventory = updatedInventory.map((p) => { if (p.id === productId) { const currentCats = Array.isArray(p.categories) ? [...p.categories] : p.category ? [p.category] : []; let newCats = [...currentCats]; if (action === 'add') { if (!newCats.includes(categoryName)) newCats.push(categoryName); } else if (action === 'remove') { newCats = newCats.filter((c) => c !== categoryName); } return { ...p, categories: newCats, category: newCats.length > 0 ? newCats[0] : '', }; } return p; }); logDetails.push(`${action === 'add' ? 'Agregado a' : 'Quitado de'} ${categoryName} (Prod: ${productId})`); }); setInventory(updatedInventory); addLog('Edición Masiva Categorías', { count: changes.length, details: logDetails, }); showNotification('success', 'Edición Masiva', `Se actualizaron ${changes.length} productos.`); }} onUpdateProductCategory={() => {}} />)}
         </main>
       </div>
 
-      {/* --- SECCIÓN DE MODALES CENTRALIZADOS --- */}
-      
-      {/* Modal de Impresión (Invisible en Pantalla, Visible al Imprimir) */}
+      {/* --- MODALES --- */}
       <TicketPrintLayout transaction={ticketToView || saleSuccessModal} />
-
-      {/* Modal de Notificación */}
-      <NotificationModal 
-        isOpen={notification.isOpen}
-        onClose={closeNotification}
-        type={notification.type}
-        title={notification.title}
-        message={notification.message}
-      />
-
-      <OpeningBalanceModal 
-        isOpen={isOpeningBalanceModalOpen} 
-        onClose={() => setIsOpeningBalanceModalOpen(false)}
-        tempOpeningBalance={tempOpeningBalance}
-        setTempOpeningBalance={setTempOpeningBalance}
-        tempClosingTime={tempClosingTime}
-        setTempClosingTime={setTempClosingTime}
-        onSave={handleSaveOpeningBalance}
-      />
-
-      <ClosingTimeModal 
-        isOpen={isClosingTimeModalOpen}
-        onClose={() => setIsClosingTimeModalOpen(false)}
-        closingTime={closingTime}
-        setClosingTime={setClosingTime}
-        onSave={handleSaveClosingTime}
-      />
-
-      <AddProductModal 
-        isOpen={isModalOpen}
-        onClose={() => {
-          setIsModalOpen(false);
-          setPendingBarcodeForNewProduct('');
+      <NotificationModal isOpen={notification.isOpen} onClose={closeNotification} type={notification.type} title={notification.title} message={notification.message} />
+      <OpeningBalanceModal isOpen={isOpeningBalanceModalOpen} onClose={() => setIsOpeningBalanceModalOpen(false)} tempOpeningBalance={tempOpeningBalance} setTempOpeningBalance={setTempOpeningBalance} tempClosingTime={tempClosingTime} setTempClosingTime={setTempClosingTime} onSave={handleSaveOpeningBalance} />
+      <ClosingTimeModal isOpen={isClosingTimeModalOpen} onClose={() => setIsClosingTimeModalOpen(false)} closingTime={closingTime} setClosingTime={setClosingTime} onSave={handleSaveClosingTime} />
+      <AddProductModal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setPendingBarcodeForNewProduct(''); }} newItem={newItem} setNewItem={setNewItem} categories={categories} onImageUpload={handleImageUpload} onAdd={handleAddItem} inventory={inventory} onDuplicateBarcode={handleDuplicateBarcodeDetected} />
+      <EditProductModal product={editingProduct} onClose={() => setEditingProduct(null)} setEditingProduct={setEditingProduct} categories={categories} onImageUpload={handleImageUpload} editReason={editReason} setEditReason={setEditReason} onSave={saveEditProduct} inventory={inventory} onDuplicateBarcode={handleDuplicateBarcodeDetected} />
+      <EditTransactionModal transaction={editingTransaction} onClose={() => setEditingTransaction(null)} inventory={inventory} setEditingTransaction={setEditingTransaction} transactionSearch={transactionSearch} setTransactionSearch={setTransactionSearch} addTxItem={addTxItem} removeTxItem={removeTxItem} setTxItemQty={setTxItemQty} handlePaymentChange={handleEditTxPaymentChange} editReason={editReason} setEditReason={setEditReason} onSave={handleSaveEditedTransaction} />
+      <ImageModal isOpen={isImageModalOpen} image={selectedImage} onClose={() => setIsImageModalOpen(false)} />
+      <RefundModal transaction={transactionToRefund} onClose={() => setIsRefundModalOpen(false)} refundReason={refundReason} setRefundReason={setRefundReason} onConfirm={handleConfirmRefund} />
+      <CloseCashModal isOpen={isClosingCashModalOpen} onClose={() => setIsClosingCashModalOpen(false)} salesCount={salesCount} totalSales={totalSales} openingBalance={openingBalance} onConfirm={handleConfirmCloseCash} />
+      <SaleSuccessModal transaction={saleSuccessModal} onClose={() => setSaleSuccessModal(null)} onViewTicket={() => handleViewTicket(saleSuccessModal)} />
+      <TicketModal transaction={ticketToView} onClose={() => setTicketToView(null)} onPrint={handlePrintTicket} />
+      <AutoCloseAlertModal isOpen={isAutoCloseAlertOpen} onClose={() => setIsAutoCloseAlertOpen(false)} closingTime={closingTime} />
+      <DeleteProductModal product={productToDelete} onClose={() => setIsDeleteProductModalOpen(false)} reason={deleteProductReason} setReason={setDeleteProductReason} onConfirm={confirmDeleteProduct} />
+      <BarcodeNotFoundModal isOpen={barcodeNotFoundModal.isOpen} scannedCode={barcodeNotFoundModal.code} onClose={() => setBarcodeNotFoundModal({ isOpen: false, code: '' })} onAddProduct={handleAddProductFromBarcode} />
+      <BarcodeDuplicateModal isOpen={barcodeDuplicateModal.isOpen} existingProduct={barcodeDuplicateModal.existingProduct} onClose={() => setBarcodeDuplicateModal({ isOpen: false, existingProduct: null, newBarcode: '' })} onKeepExisting={() => setBarcodeDuplicateModal({ isOpen: false, existingProduct: null, newBarcode: '' })} onReplaceBarcode={handleReplaceDuplicateBarcode} />
+      
+      {/* NUEVO MODAL DE SELECCIÓN DE SOCIO */}
+      <ClientSelectionModal 
+        isOpen={isClientModalOpen}
+        onClose={() => setIsClientModalOpen(false)}
+        clients={members} 
+        addClient={addMember} 
+        onSelectClient={(client, mode) => {
+          setPosSelectedClient(client);
         }}
-        newItem={newItem}
-        setNewItem={setNewItem}
-        categories={categories}
-        onImageUpload={handleImageUpload}
-        onAdd={handleAddItem}
-        inventory={inventory}
-        onDuplicateBarcode={handleDuplicateBarcodeDetected}
+        // Callback para continuar compra sin socio
+        onCancelFlow={() => {
+          handleCheckout();
+        }}
       />
-
-      <EditProductModal 
-        product={editingProduct}
-        onClose={() => setEditingProduct(null)}
-        setEditingProduct={setEditingProduct}
-        categories={categories}
-        onImageUpload={handleImageUpload}
-        editReason={editReason}
-        setEditReason={setEditReason}
-        onSave={saveEditProduct}
-        inventory={inventory}
-        onDuplicateBarcode={handleDuplicateBarcodeDetected}
-      />
-
-      <EditTransactionModal 
-        transaction={editingTransaction}
-        onClose={() => setEditingTransaction(null)}
-        inventory={inventory}
-        setEditingTransaction={setEditingTransaction}
-        transactionSearch={transactionSearch}
-        setTransactionSearch={setTransactionSearch}
-        addTxItem={addTxItem}
-        removeTxItem={removeTxItem}
-        setTxItemQty={setTxItemQty}
-        handlePaymentChange={handleEditTxPaymentChange}
-        editReason={editReason}
-        setEditReason={setEditReason}
-        onSave={handleSaveEditedTransaction}
-      />
-
-      <ImageModal 
-        isOpen={isImageModalOpen}
-        image={selectedImage}
-        onClose={() => setIsImageModalOpen(false)}
-      />
-
-      <RefundModal 
-        transaction={transactionToRefund}
-        onClose={() => setIsRefundModalOpen(false)}
-        refundReason={refundReason}
-        setRefundReason={setRefundReason}
-        onConfirm={handleConfirmRefund}
-      />
-
-      <CloseCashModal 
-        isOpen={isClosingCashModalOpen}
-        onClose={() => setIsClosingCashModalOpen(false)}
-        salesCount={salesCount}
-        totalSales={totalSales}
-        openingBalance={openingBalance}
-        onConfirm={handleConfirmCloseCash}
-      />
-
-      <SaleSuccessModal 
-        transaction={saleSuccessModal}
-        onClose={() => setSaleSuccessModal(null)}
-        onViewTicket={() => handleViewTicket(saleSuccessModal)}
-      />
-
-      <TicketModal 
-        transaction={ticketToView}
-        onClose={() => setTicketToView(null)}
-        onPrint={handlePrintTicket}
-      />
-
-      <AutoCloseAlertModal 
-        isOpen={isAutoCloseAlertOpen}
-        onClose={() => setIsAutoCloseAlertOpen(false)}
-        closingTime={closingTime}
-      />
-
-      <DeleteProductModal 
-        product={productToDelete}
-        onClose={() => setIsDeleteProductModalOpen(false)}
-        reason={deleteProductReason}
-        setReason={setDeleteProductReason}
-        onConfirm={confirmDeleteProduct}
-      />
-
-      {/* Modal: Código de barras no encontrado */}
-      <BarcodeNotFoundModal 
-        isOpen={barcodeNotFoundModal.isOpen}
-        scannedCode={barcodeNotFoundModal.code}
-        onClose={() => setBarcodeNotFoundModal({ isOpen: false, code: '' })}
-        onAddProduct={handleAddProductFromBarcode}
-      />
-
-      {/* Modal: Código de barras duplicado */}
-      <BarcodeDuplicateModal 
-        isOpen={barcodeDuplicateModal.isOpen}
-        existingProduct={barcodeDuplicateModal.existingProduct}
-        onClose={() => setBarcodeDuplicateModal({ isOpen: false, existingProduct: null, newBarcode: '' })}
-        onKeepExisting={() => setBarcodeDuplicateModal({ isOpen: false, existingProduct: null, newBarcode: '' })}
-        onReplaceBarcode={handleReplaceDuplicateBarcode}
-      />
-
     </div>
   );
 }
