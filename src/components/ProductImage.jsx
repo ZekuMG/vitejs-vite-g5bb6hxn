@@ -1,25 +1,7 @@
 import React from 'react';
 import { Package } from 'lucide-react';
-
-// Genera un gradiente único basado en el ID del producto
-const getGradientForItem = (id, title) => {
-  const gradients = [
-    'from-violet-500 to-purple-600',
-    'from-blue-500 to-cyan-500',
-    'from-emerald-500 to-teal-600',
-    'from-orange-500 to-amber-500',
-    'from-pink-500 to-rose-500',
-    'from-indigo-500 to-blue-600',
-    'from-fuchsia-500 to-pink-600',
-    'from-teal-500 to-green-500',
-    'from-red-500 to-orange-500',
-    'from-cyan-500 to-blue-500',
-  ];
-  
-  // Usa el ID para seleccionar un gradiente consistente
-  const index = (typeof id === 'number' ? id : title.length) % gradients.length;
-  return gradients[index];
-};
+// ♻️ REFACTOR: Importar función desde helpers.js en lugar de definirla localmente
+import { getGradientForItem } from '../utils/helpers';
 
 const ProductImage = ({ item, className = '', onClick }) => {
   const hasImage = item.image && item.image.trim() !== '';

@@ -358,7 +358,7 @@ export default function ClientsView({
                       <p className="text-blue-100 text-sm font-medium mb-1 uppercase tracking-wide">Saldo de Puntos</p>
                       <div className="flex items-baseline gap-2">
                         <span className="text-5xl font-black tracking-tight">{selectedMember.points}</span>
-                        <span className="text-lg font-medium opacity-80">pts</span>
+                        <span className="text-lg font-medium opacity-80">Puntos.</span>
                       </div>
                     </div>
                     <div className="absolute right-0 top-0 opacity-10 transform translate-x-4 -translate-y-4"><User size={120} /></div>

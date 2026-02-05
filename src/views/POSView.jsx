@@ -21,6 +21,8 @@ import {
   AlertCircle // Icono para el modal de aviso
 } from 'lucide-react';
 import { PAYMENT_METHODS } from '../data';
+// ♻️ REFACTOR: Importar formatPrice desde helpers.js
+import { formatPrice } from '../utils/helpers';
 
 export default function POSView({
   inventory,
@@ -52,12 +54,7 @@ export default function POSView({
   const [showGridMenu, setShowGridMenu] = useState(false);
   const [showClientCheckModal, setShowClientCheckModal] = useState(false); // Estado para el check de socio
 
-  // =====================================================
-  // HELPER DE FORMATO (SIN DECIMALES, REDONDEO ARRIBA)
-  // =====================================================
-  const formatPrice = (amount) => {
-    return Math.ceil(Number(amount) || 0).toLocaleString('es-AR');
-  };
+  // ♻️ REFACTOR: formatPrice eliminado - ahora importado desde helpers.js
 
   // =====================================================
   // HELPER: Obtener stock efectivo

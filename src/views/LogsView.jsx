@@ -27,6 +27,8 @@ import {
   Wand2,
   CheckCircle,
 } from 'lucide-react';
+// ♻️ REFACTOR: Importar formatPrice desde helpers.js
+import { formatPrice } from '../utils/helpers';
 
 export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
   const [filterDateStart, setFilterDateStart] = useState('');
@@ -53,12 +55,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
 
   const safeLogs = Array.isArray(dailyLogs) ? dailyLogs : [];
 
-  // =====================================================
-  // HELPER GLOBAL DE PRECIOS (Sin decimales, redondeo arriba)
-  // =====================================================
-  const formatPrice = (amount) => {
-    return Math.ceil(Number(amount) || 0).toLocaleString('es-AR');
-  };
+  // ♻️ REFACTOR: formatPrice eliminado - ahora importado desde helpers.js
 
   // =====================================================
   // NORMALIZACIÓN DE ACCIONES

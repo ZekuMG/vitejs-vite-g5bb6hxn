@@ -27,13 +27,8 @@ import {
   Gift
 } from 'lucide-react';
 import { PAYMENT_METHODS } from '../data';
-
-// ==========================================
-// HELPER GLOBAL PARA FORMATO DE PRECIO
-// ==========================================
-const formatPrice = (amount) => {
-  return Math.ceil(Number(amount) || 0).toLocaleString('es-AR');
-};
+// ♻️ REFACTOR: Importar funciones desde helpers.js en lugar de definirlas localmente
+import { formatPrice, formatTime24 } from '../utils/helpers';
 
 // ==========================================
 // COMPONENTES AUXILIARES
@@ -910,24 +905,7 @@ export const TicketModal = ({ transaction, onClose, onPrint }) => {
   if (!transaction) return null;
   const formattedId = String(transaction.id).padStart(6, '0');
 
-  // Helper para hora 24hs (igual que en PrintLayout)
-  const formatTime24 = (timeStr) => {
-    if (!timeStr) return '--:--';
-    if (/^\d{1,2}:\d{2}$/.test(timeStr) && !timeStr.toLowerCase().includes('m')) {
-      return timeStr;
-    }
-    const match = timeStr.match(/(\d{1,2}):(\d{2})\s*(a\.?\s*m\.?|p\.?\s*m\.?)?/i);
-    if (match) {
-      let hours = parseInt(match[1], 10);
-      const minutes = match[2];
-      const period = match[3]?.toLowerCase().replace(/[\s.]/g, '') || '';
-      if (period === 'pm' && hours !== 12) hours += 12;
-      if (period === 'am' && hours === 12) hours = 0;
-      return `${hours.toString().padStart(2, '0')}:${minutes}`;
-    }
-    return timeStr;
-  };
-
+  // ♻️ REFACTOR: formatTime24 ahora importado desde helpers.js
   const timeFormatted = formatTime24(transaction.time || transaction.timestamp);
 
   // --- LÓGICA DE RECARGO PARA VISTA PREVIA ---

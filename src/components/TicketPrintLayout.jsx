@@ -1,34 +1,12 @@
 import React from 'react';
+// ♻️ REFACTOR: Importar funciones desde helpers.js en lugar de definirlas localmente
+import { formatPrice, formatTime24 } from '../utils/helpers';
 
 export const TicketPrintLayout = ({ transaction }) => {
   if (!transaction) return null;
 
   // Formatear ID a 6 dígitos
   const formattedId = String(transaction.id).padStart(6, '0');
-
-  // Formatear hora a 24hrs
-  const formatTime24 = (timeStr) => {
-    if (!timeStr) return '--:--';
-    if (/^\d{1,2}:\d{2}$/.test(timeStr) && !timeStr.toLowerCase().includes('m')) {
-      return timeStr;
-    }
-    const match = timeStr.match(/(\d{1,2}):(\d{2})\s*(a\.?\s*m\.?|p\.?\s*m\.?)?/i);
-    if (match) {
-      let hours = parseInt(match[1], 10);
-      const minutes = match[2];
-      const period = match[3]?.toLowerCase().replace(/[\s.]/g, '') || '';
-      if (period === 'pm' && hours !== 12) hours += 12;
-      if (period === 'am' && hours === 12) hours = 0;
-      return `${hours.toString().padStart(2, '0')}:${minutes}`;
-    }
-    return timeStr;
-  };
-
-  // Formatear precio
-  const formatPrice = (value) => {
-    const num = Number(value) || 0;
-    return num % 1 === 0 ? num.toLocaleString('es-AR') : num.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  };
 
   const timeFormatted = formatTime24(transaction.time || transaction.timestamp);
 
