@@ -675,6 +675,38 @@ export const TicketModal = ({ transaction, onClose, onPrint }) => {
   if (!transaction) return null;
   const formattedId = String(transaction.id).padStart(6, '0');
 
+  // Helper para hora 24hs (igual que en PrintLayout)
+  const formatTime24 = (timeStr) => {
+    if (!timeStr) return '--:--';
+    if (/^\d{1,2}:\d{2}$/.test(timeStr) && !timeStr.toLowerCase().includes('m')) {
+      return timeStr;
+    }
+    const match = timeStr.match(/(\d{1,2}):(\d{2})\s*(a\.?\s*m\.?|p\.?\s*m\.?)?/i);
+    if (match) {
+      let hours = parseInt(match[1], 10);
+      const minutes = match[2];
+      const period = match[3]?.toLowerCase().replace(/[\s.]/g, '') || '';
+      if (period === 'pm' && hours !== 12) hours += 12;
+      if (period === 'am' && hours === 12) hours = 0;
+      return `${hours.toString().padStart(2, '0')}:${minutes}`;
+    }
+    return timeStr;
+  };
+
+  const timeFormatted = formatTime24(transaction.time || transaction.timestamp);
+
+  // --- LÓGICA DE RECARGO PARA VISTA PREVIA ---
+  const itemsSubtotal = (transaction.items || []).reduce((acc, item) => {
+    const p = Number(item.price) || 0;
+    const q = Number(item.qty || item.quantity) || 1;
+    return acc + (p * q);
+  }, 0);
+
+  let surcharge = 0;
+  if (transaction.total > itemsSubtotal + 0.1) {
+    surcharge = transaction.total - itemsSubtotal;
+  }
+
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[60] p-4 backdrop-blur-sm">
       <div className="bg-white rounded-xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden w-full max-w-sm">
@@ -684,36 +716,72 @@ export const TicketModal = ({ transaction, onClose, onPrint }) => {
         </div>
 
         <div className="overflow-y-auto p-6 bg-slate-200 flex justify-center">
-          <div className="bg-white shadow-lg p-4 w-[280px] text-xs font-mono text-slate-900 leading-tight">
-            <div className="text-center font-bold text-sm mb-1">COTILLON REBU</div>
-            <div className="text-center mb-2">Articulos para Fiestas</div>
+          {/* VISTA PREVIA ESTILO TICKET */}
+          <div 
+            className="bg-white shadow-lg p-5 w-[280px] text-slate-900 leading-tight select-none"
+            style={{ fontFamily: 'Arial, sans-serif', fontSize: '11px', fontWeight: 'bold' }}
+          >
+            {/* Header */}
+            <div className="text-center text-sm font-black mb-1">COTILLON REBU</div>
+            <div className="text-center text-[10px] mb-2">Articulos para Fiestas</div>
             <div className="border-t border-dashed border-slate-400 my-2"></div>
-            <div>Direccion: Calle 158 4440, Platanos.</div>
-            <div>Tel: 11-5483-0409</div>
-            <div>Instagram: @rebucotillon</div>
+            
+            {/* Info Negocio */}
+            <div className="text-center">Direccion: Calle 158 4440</div>
+            <div className="text-center">Tel: 11-5483-0409</div>
+            <div className="text-center">Instagram: @rebucotillon</div>
             <div className="border-t border-dashed border-slate-400 my-2"></div>
-            <div>Fecha: {transaction.date?.split(',')[0]}</div>
-            <div>Hora: {transaction.time || transaction.timestamp}</div>
-            <div className="font-bold">Compra N°: {formattedId}</div>
+            
+            {/* Info Venta */}
+            <div className="flex justify-between"><span>Fecha:</span><span>{transaction.date?.split(',')[0]}</span></div>
+            <div className="flex justify-between"><span>Hora:</span><span>{timeFormatted}</span></div>
+            <div className="font-black mt-1">Compra N°: {formattedId}</div>
             <div className="border-t border-dashed border-slate-400 my-2"></div>
+            
+            {/* Fidelización (Vacío) */}
+            <div className="flex justify-between"><span>Nº Cliente:</span><span></span></div>
+            <div className="flex justify-between"><span>Puntos Sumados:</span><span></span></div>
+            <div className="flex justify-between"><span>Puntos Total:</span><span></span></div>
+            <div className="border-t border-dashed border-slate-400 my-2"></div>
+
+            {/* Items */}
             <div className="space-y-1">
               {(transaction.items || []).map((item, idx) => (
-                <div key={idx} className="flex justify-between">
-                  <span className="truncate max-w-[160px]">{item.title} {item.qty > 1 ? `x${item.qty}` : ''}</span>
+                <div key={idx} className="flex justify-between items-start">
+                  <span className="flex-1 pr-2">
+                    {item.qty > 1 ? `(${item.qty}) ` : ''}{item.title}
+                  </span>
                   <span>$ {((item.qty || 1) * (item.price || 0)).toLocaleString('es-AR')}</span>
                 </div>
               ))}
             </div>
             <div className="border-t border-dashed border-slate-400 my-2"></div>
-            <div className="flex justify-between"><span>Subtotal:</span><span>$ {transaction.total?.toLocaleString('es-AR')}</span></div>
+            
+            {/* Totales */}
+            <div className="flex justify-between"><span>Subtotal:</span><span>$ {itemsSubtotal.toLocaleString('es-AR')}</span></div>
+            
+            {surcharge > 0 && (
+              <div className="flex justify-between"><span>Recargo (10%):</span><span>$ {surcharge.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></div>
+            )}
+            
             <div className="flex justify-between"><span>Descuento:</span><span>$ 0</span></div>
             <div className="border-t border-dashed border-slate-400 my-2"></div>
-            <div className="flex justify-between font-bold text-sm"><span>TOTAL:</span><span>$ {transaction.total?.toLocaleString('es-AR')}</span></div>
+            
+            <div className="flex justify-between font-black text-sm"><span>TOTAL:</span><span>$ {transaction.total?.toLocaleString('es-AR')}</span></div>
             <div className="border-t border-dashed border-slate-400 my-2"></div>
+            
+            {/* Pago */}
             <div>Pago: {transaction.payment?.toUpperCase()}</div>
+            {transaction.installments > 1 && (
+               <div>Cuotas: {transaction.installments}</div>
+            )}
             <div className="border-t border-dashed border-slate-400 my-2"></div>
-            <div className="text-center mt-4">¡Gracias por tu compra!</div>
-            <div className="text-center mb-4">Volve pronto :D</div>
+            
+            {/* Footer */}
+            <div className="text-center mt-3">¡Gracias por tu compra!</div>
+            <div className="text-center text-[10px] mt-1">Volve pronto :D</div>
+            <br />
+            <div className="border-t border-dashed border-slate-400 my-1"></div>
           </div>
         </div>
 
