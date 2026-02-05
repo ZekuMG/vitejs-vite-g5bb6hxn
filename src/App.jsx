@@ -278,7 +278,7 @@ export default function PartySupplyApp() {
   };
 
   // --- LÓGICA DEL ESCÁNER DE CÓDIGO DE BARRAS ---
-  const handleBarcodeScan = (scannedCode) => {
+  const handleBarcodeScan = (scannedCode, wasInInput) => {
     // Buscar producto por código de barras
     const product = inventory.find(
       (p) => String(p.barcode) === scannedCode
@@ -309,24 +309,33 @@ export default function PartySupplyApp() {
         setBarcodeNotFoundModal({ isOpen: true, code: scannedCode });
       }
     } else if (activeTab === 'inventory') {
-      // --- MODO INVENTARIO: Seleccionar producto o mostrar modal ---
-      if (product) {
-        playBeep(true);
-        // Abrir el producto en edición (simula click en el HUD)
-        setEditingProduct(product);
-        setEditReason('');
-      } else {
-        playBeep(false);
-        setBarcodeNotFoundModal({ isOpen: true, code: scannedCode });
+      // --- MODO INVENTARIO: Poner código en el buscador ---
+      playBeep(true);
+      setInventorySearch(scannedCode);
+      
+      if (!product) {
+        // Si no existe, mostrar modal para agregar
+        setTimeout(() => {
+          setBarcodeNotFoundModal({ isOpen: true, code: scannedCode });
+        }, 300); // Pequeño delay para que se vea la búsqueda
       }
     }
+  };
+
+  // Callback para limpiar input cuando se escanea
+  const handleInputScan = (scannedCode) => {
+    // Limpiar el input de búsqueda según la pestaña activa
+    if (activeTab === 'pos') {
+      setPosSearch(''); // Limpiar búsqueda POS
+    }
+    // En inventario NO limpiamos porque queremos que quede el código
   };
 
   // Activar escáner solo en POS e Inventario
   useBarcodeScanner({
     isEnabled: (activeTab === 'pos' && !isRegisterClosed) || activeTab === 'inventory',
     onScan: handleBarcodeScan,
-    ignoreInputs: true
+    onInputScan: handleInputScan
   });
 
   // Handler: Cerrar modal "No encontrado" y abrir modal de nuevo producto
