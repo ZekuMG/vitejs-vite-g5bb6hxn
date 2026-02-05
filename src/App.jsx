@@ -116,14 +116,15 @@ export default function PartySupplyApp() {
   const { members, addMember, updateMember, deleteMember, addPoints } = useClients();
 
   // --- WRAPPERS PARA LOGS DE SOCIOS (Intermediarios para registrar acciones) ---
-  
+    
   const handleAddMemberWithLog = (data) => {
     const newMember = addMember(data);
     if (newMember) {
       addLog('Nuevo Socio', { 
         name: newMember.name, 
         number: newMember.memberNumber,
-        initialPoints: newMember.points 
+        initialPoints: newMember.points,
+        email: newMember.email
       }, 'Registro manual de socio');
     }
   };
@@ -132,26 +133,54 @@ export default function PartySupplyApp() {
     const currentMember = members.find(m => m.id === id);
     if (!currentMember) return;
 
-    // 1. Detectar cambio de Puntos (Log específico)
+    // 1. Detectar cambio de Puntos
+    let pointsDiffData = null;
     if (updates.points !== undefined && Number(updates.points) !== currentMember.points) {
-      addLog('Edición de Puntos', {
-        member: currentMember.name,
+      pointsDiffData = {
         previous: currentMember.points,
         new: Number(updates.points),
         diff: Number(updates.points) - currentMember.points
-      }, 'Ajuste manual de saldo');
+      };
     }
 
-    // 2. Detectar otros cambios de datos (Log general)
-    const dataChanged = Object.keys(updates).some(k => 
-      k !== 'points' && k !== 'id' && updates[k] !== currentMember[k]
-    );
-    
-    if (dataChanged) {
-       addLog('Edición de Socio', {
-         member: currentMember.name,
-         updates: Object.keys(updates).filter(k => k !== 'points' && k !== 'id' && updates[k] !== currentMember[k])
-       }, 'Actualización de datos personales');
+    // 2. Detectar otros cambios de datos
+    const changes = [];
+    Object.keys(updates).forEach(key => {
+      // Ignoramos 'points' (ya manejado arriba) y 'id'
+      if (key !== 'points' && key !== 'id' && updates[key] !== currentMember[key]) {
+        changes.push({
+          field: key,
+          old: currentMember[key],
+          new: updates[key]
+        });
+      }
+    });
+
+    // 3. Generar UN SOLO Log inteligente
+    if (pointsDiffData && changes.length > 0) {
+      // CASO HÍBRIDO: Cambiaron datos Y puntos -> Log Unificado
+      addLog('Edición de Socio', {
+        member: currentMember.name,
+        number: currentMember.memberNumber,
+        changes: changes,
+        pointsChange: pointsDiffData // Payload combinado para la vista
+      }, 'Actualización de perfil y ajuste de puntos');
+    } 
+    else if (pointsDiffData) {
+      // CASO SOLO PUNTOS
+      addLog('Edición de Puntos', {
+        member: currentMember.name,
+        number: currentMember.memberNumber,
+        ...pointsDiffData
+      }, 'Ajuste manual de saldo');
+    } 
+    else if (changes.length > 0) {
+      // CASO SOLO DATOS
+      addLog('Edición de Socio', {
+        member: currentMember.name,
+        number: currentMember.memberNumber,
+        changes: changes
+      }, 'Actualización de datos personales');
     }
 
     // Aplicar cambio en el hook

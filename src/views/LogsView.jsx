@@ -29,7 +29,9 @@ import {
   UserPlus,
   UserMinus,
   UserCog,
-  Trophy
+  Trophy,
+  CreditCard,
+  Hash
 } from 'lucide-react';
 // ♻️ REFACTOR: Importar formatPrice desde helpers.js
 import { formatPrice } from '../utils/helpers';
@@ -349,62 +351,71 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
       return <span className="text-slate-600 text-[10px]">{details}</span>;
 
     switch (action) {
-      // --- ACCIONES DE SOCIOS ---
+      // --- ACCIONES DE SOCIOS UNIFICADAS ---
       case 'Nuevo Socio':
-        return (
-           <div className="flex items-center gap-2 flex-wrap">
-             <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1">
-               <UserPlus size={10} /> Nuevo
-             </span>
-             <span className="text-slate-700 font-bold text-[10px]">
-               {details.name}
-             </span>
-             <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-[10px] font-mono">
-               #{String(details.number).padStart(4, '0')}
-             </span>
-           </div>
-        );
-
-      // CASO UNIFICADO: Edición de Socio o Puntos
       case 'Edición de Puntos':
       case 'Edición de Socio':
-        return (
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1">
-               <UserCog size={10} /> Edición
-            </span>
-            <span className="text-slate-700 text-[10px] font-bold">
-               {details.member}
-            </span>
-            {/* Si es puntos, mostramos badge de diferencia */}
-            {action === 'Edición de Puntos' && (
-                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${details.diff > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                {details.diff > 0 ? '+' : ''}{details.diff} pts
-                </span>
-            )}
-            {/* Si es datos, mostramos cantidad de campos */}
-            {action === 'Edición de Socio' && (
-                <span className="text-slate-400 text-[10px]">
-                ({(details.updates || []).length} cambios)
-                </span>
-            )}
-          </div>
-        );
-
       case 'Baja de Socio':
-         return (
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1">
-               <UserMinus size={10} /> Baja
-            </span>
-            <span className="text-slate-700 text-[10px] line-through">
-               {details.name}
-            </span>
-            <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-[10px] font-mono">
-               #{String(details.number).padStart(4, '0')}
+        const isNew = action === 'Nuevo Socio';
+        const isDelete = action === 'Baja de Socio';
+        
+        // Detectar datos extra para resumen híbrido
+        const pointsDiff = details.pointsChange ? details.pointsChange.diff : details.diff;
+        const changesCount = details.changes ? details.changes.length : (details.updates || []).length;
+
+        // Determinar icono y color base según tipo
+        let badgeClass = 'bg-blue-100 text-blue-700';
+        let Icon = UserCog;
+        let label = 'Edición';
+
+        if (isNew) {
+           badgeClass = 'bg-green-100 text-green-700';
+           Icon = UserPlus;
+           label = 'Alta';
+        } else if (isDelete) {
+           badgeClass = 'bg-red-100 text-red-700';
+           Icon = UserMinus;
+           label = 'Baja';
+        } else if (action === 'Edición de Puntos') {
+            label = 'Puntos';
+            Icon = Trophy;
+            badgeClass = 'bg-purple-100 text-purple-700';
+        }
+
+        return (
+           <div className="flex items-center gap-2 flex-wrap">
+             {/* Badge Principal */}
+             <span className={`${badgeClass} px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1`}>
+               <Icon size={10} /> {label}
              </span>
-          </div>
-         );
+             
+             {/* Nombre Socio */}
+             <span className={`text-[10px] font-bold ${isDelete ? 'text-slate-500 line-through' : 'text-slate-700'}`}>
+               {details.name || details.member}
+             </span>
+
+             {/* N° Socio */}
+             {details.number && (
+               <span className="bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded text-[10px] font-mono border border-slate-200">
+                 #{String(details.number).padStart(4, '0')}
+               </span>
+             )}
+
+             {/* Diferencia de Puntos (si aplica en cualquier caso) */}
+             {pointsDiff !== undefined && (
+                <span className={`ml-auto px-1.5 py-0.5 rounded text-[10px] font-mono font-bold ${pointsDiff > 0 ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
+                {pointsDiff > 0 ? '+' : ''}{pointsDiff} pts
+                </span>
+             )}
+
+             {/* Cantidad de Cambios de datos (si aplica) */}
+             {action === 'Edición de Socio' && changesCount > 0 && (
+                <span className="ml-auto text-slate-400 text-[10px] italic">
+                ({changesCount} cambios)
+                </span>
+             )}
+           </div>
+        );
 
       // --- OTROS CASOS ---
       case 'Venta Realizada': {
@@ -800,126 +811,159 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
     }
 
     switch (action) {
-      // --- DETALLES DE SOCIOS ---
+      // --- DETALLES DE SOCIOS (UNIFICADO) ---
       case 'Nuevo Socio':
-        return (
-          <div className="space-y-3">
-            <div className="bg-green-50 p-4 rounded-lg border border-green-200 flex items-center gap-4">
-               <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center text-white">
-                  <UserPlus size={24} />
-               </div>
-               <div>
-                  <p className="text-[10px] font-bold text-green-600 uppercase">Alta de Cliente</p>
-                  <p className="text-lg font-bold text-slate-800">{details.name}</p>
-               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-slate-50 p-3 rounded border">
-                <p className="text-[10px] text-slate-400 uppercase font-bold">N° Socio</p>
-                <p className="font-mono font-bold text-slate-700">#{String(details.number).padStart(4,'0')}</p>
-              </div>
-              <div className="bg-slate-50 p-3 rounded border">
-                <p className="text-[10px] text-slate-400 uppercase font-bold">Puntos Iniciales</p>
-                <p className="font-mono font-bold text-slate-700">{details.initialPoints || 0} pts</p>
-              </div>
-            </div>
-          </div>
-        );
-
-      // CASO UNIFICADO: Edición de Socio o Puntos
       case 'Edición de Puntos':
       case 'Edición de Socio':
-        const isPoints = action === 'Edición de Puntos';
-        return (
-          <div className="space-y-3">
-            <div className={`p-4 rounded-lg border flex items-center gap-4 ${isPoints ? 'bg-purple-50 border-purple-200' : 'bg-blue-50 border-blue-200'}`}>
-               <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white ${isPoints ? 'bg-purple-500' : 'bg-blue-500'}`}>
-                  {isPoints ? <Trophy size={24} /> : <UserCog size={24} />}
-               </div>
-               <div>
-                  <p className={`text-[10px] font-bold uppercase ${isPoints ? 'text-purple-600' : 'text-blue-600'}`}>
-                    {isPoints ? 'Ajuste de Saldo' : 'Actualización de Datos'}
-                  </p>
-                  <p className="text-lg font-bold text-slate-800">{details.member}</p>
-               </div>
-            </div>
-
-            {/* Sub-bloque Puntos (Antes vs Después) */}
-            {isPoints && (
-                <>
-                <div className="flex items-center justify-between bg-slate-50 p-4 rounded-lg border">
-                    <div className="text-center">
-                    <p className="text-[10px] text-slate-400 uppercase font-bold mb-1">Anterior</p>
-                    <p className="text-xl font-mono text-slate-500">{details.previous} pts</p>
-                    </div>
-                    <ArrowRight className="text-slate-300" />
-                    <div className="text-center">
-                    <p className="text-[10px] text-slate-400 uppercase font-bold mb-1">Nuevo</p>
-                    <p className="text-xl font-mono text-slate-800 font-bold">{details.new} pts</p>
-                    </div>
-                </div>
-                <div className={`p-3 rounded-lg text-center font-bold text-sm ${details.diff > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                    Diferencia: {details.diff > 0 ? '+' : ''}{details.diff} puntos
-                </div>
-                </>
-            )}
-
-            {/* Sub-bloque Datos (Lista de Cambios - Antes vs Después si está disponible) */}
-            {!isPoints && (
-                <div className="border rounded-lg overflow-hidden">
-                <div className="bg-slate-100 px-3 py-2 border-b">
-                    <p className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1">
-                    <List size={14}/> Campos Modificados
-                    </p>
-                </div>
-                {/* Si en App.jsx pasaste 'updates' como array simple de strings (["name", "email"]), se muestra lista simple.
-                   Si pasaste objeto detallado con 'old' y 'new', podríamos mostrar tabla comparativa.
-                   Aquí asumo que 'details.updates' es un array de strings (como lo dejé en el paso anterior).
-                */}
-                <ul className="divide-y max-h-60 overflow-y-auto bg-white">
-                    {(details.updates || []).map((field, idx) => (
-                    <li key={idx} className="px-3 py-2 text-xs flex items-center gap-2">
-                        <CheckCircle size={14} className="text-blue-500" />
-                        <span className="text-slate-700">Se modificó: <span className="font-bold capitalize">{field}</span></span>
-                    </li>
-                    ))}
-                    {(details.updates || []).length === 0 && (
-                    <li className="px-3 py-4 text-center text-xs text-slate-400 italic">
-                        No se registraron cambios específicos
-                    </li>
-                    )}
-                </ul>
-                <div className="bg-slate-50 p-2 text-[10px] text-center text-slate-400 border-t">
-                    * Para ver el valor anterior y nuevo, revisa el historial individual del socio.
-                </div>
-                </div>
-            )}
-          </div>
-        );
-
       case 'Baja de Socio':
+        const isNew = action === 'Nuevo Socio';
+        const isDelete = action === 'Baja de Socio';
+        
+        // Detectar si hay datos de puntos (ya sea en objeto pointsChange o directo en details)
+        const pointsData = details.pointsChange || (action === 'Edición de Puntos' ? details : null);
+        
+        const memberName = details.name || details.member || 'Socio Desconocido';
+        const memberNumber = details.number ? String(details.number).padStart(4, '0') : '????';
+
         return (
-          <div className="space-y-3">
-             <div className="bg-red-50 p-4 rounded-lg border border-red-200 flex items-center gap-4">
-               <div className="w-12 h-12 bg-red-500 rounded-full flex items-center justify-center text-white">
-                  <UserMinus size={24} />
-               </div>
-               <div>
-                  <p className="text-[10px] font-bold text-red-600 uppercase">Socio Eliminado</p>
-                  <p className="text-lg font-bold text-slate-800">{details.name}</p>
-               </div>
+          <div className="space-y-4">
+            {/* CABECERA UNIFICADA DE SOCIO */}
+            <div className={`rounded-xl border border-slate-200 overflow-hidden ${isDelete ? 'bg-red-50' : 'bg-white'}`}>
+                <div className="p-4 flex items-center gap-4">
+                    {/* Avatar Placeholder */}
+                    <div className={`w-14 h-14 rounded-full flex items-center justify-center text-white shadow-sm shrink-0
+                        ${isNew ? 'bg-green-500' : isDelete ? 'bg-red-500' : pointsData ? 'bg-purple-500' : 'bg-blue-500'}`}>
+                        {isNew ? <UserPlus size={24} /> : isDelete ? <UserMinus size={24} /> : pointsData && !details.changes ? <Trophy size={24} /> : <UserCog size={24} />}
+                    </div>
+                    
+                    {/* Info Principal */}
+                    <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                            <span className={`text-[10px] font-bold uppercase tracking-wide
+                                ${isNew ? 'text-green-600' : isDelete ? 'text-red-600' : pointsData ? 'text-purple-600' : 'text-blue-600'}`}>
+                                {isNew ? 'Alta de Cliente' : isDelete ? 'Cliente Eliminado' : (pointsData && details.changes) ? 'Edición Completa' : pointsData ? 'Ajuste de Puntos' : 'Datos Actualizados'}
+                            </span>
+                        </div>
+                        <h4 className={`text-lg font-bold truncate ${isDelete ? 'text-slate-500 line-through' : 'text-slate-800'}`}>
+                            {memberName}
+                        </h4>
+                        <div className="flex items-center gap-2 mt-1">
+                            <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-500 border border-slate-200 px-2 py-0.5 rounded text-[11px] font-mono">
+                                <Hash size={10} /> {memberNumber}
+                            </span>
+                            {details.dni && (
+                                <span className="inline-flex items-center gap-1 text-slate-400 text-[11px]">
+                                    DNI: {details.dni}
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                {/* VISUALIZACIÓN DE CAMBIOS */}
+                <div className="border-t border-slate-100 bg-slate-50/50 p-4 space-y-4">
+                    
+                    {/* BLOQUE: CAMBIO DE PUNTOS (Se muestra si existe pointsData) */}
+                    {pointsData && (
+                        <div className="flex items-center justify-between gap-4">
+                           <div className="flex-1 bg-white border border-slate-200 rounded-lg p-3 text-center shadow-sm">
+                               <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">Anterior</p>
+                               <p className="text-xl font-mono text-slate-500">{pointsData.previous} pts</p>
+                           </div>
+                           <div className="flex flex-col items-center justify-center text-slate-300">
+                               <ArrowRight size={20} />
+                               <span className={`text-[10px] font-bold mt-1 ${pointsData.diff > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                   {pointsData.diff > 0 ? '+' : ''}{pointsData.diff}
+                               </span>
+                           </div>
+                           <div className="flex-1 bg-white border border-slate-200 rounded-lg p-3 text-center shadow-sm ring-1 ring-purple-100">
+                               <p className="text-[10px] text-purple-600 font-bold uppercase mb-1">Actual</p>
+                               <p className="text-xl font-mono text-slate-800 font-bold">{pointsData.new} pts</p>
+                           </div>
+                        </div>
+                    )}
+
+                    {/* BLOQUE: EDICIÓN DE DATOS (Diff Table) */}
+                    {(details.changes || (isNew && details.initialPoints)) && (
+                        <div className="bg-white rounded-lg border border-slate-200 overflow-hidden shadow-sm">
+                             {/* Header Tabla */}
+                             <div className="bg-slate-100 px-4 py-2 border-b border-slate-200 flex justify-between items-center">
+                                 <span className="text-[11px] font-bold text-slate-500 uppercase flex items-center gap-1">
+                                    <List size={12}/> {isNew ? 'Datos Iniciales' : 'Modificaciones Realizadas'}
+                                 </span>
+                             </div>
+
+                             {/* Tabla de Cambios */}
+                             {details.changes && Array.isArray(details.changes) ? (
+                                 <table className="w-full text-xs">
+                                     <thead className="bg-slate-50 text-slate-400 font-medium">
+                                         <tr>
+                                             <th className="px-4 py-2 text-left font-bold w-1/3">Campo</th>
+                                             <th className="px-4 py-2 text-center text-red-400">Antes</th>
+                                             <th className="px-2 py-2 w-8"></th>
+                                             <th className="px-4 py-2 text-center text-green-600">Ahora</th>
+                                         </tr>
+                                     </thead>
+                                     <tbody className="divide-y divide-slate-100">
+                                         {details.changes.map((change, idx) => (
+                                             <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                                                 <td className="px-4 py-2.5 font-bold text-slate-700 capitalize">{change.field}</td>
+                                                 <td className="px-4 py-2.5 text-center text-red-400 line-through decoration-red-200 decoration-2 bg-red-50/30">
+                                                     {change.old || <span className="text-slate-300 italic">-</span>}
+                                                 </td>
+                                                 <td className="px-2 py-2.5 text-center text-slate-300">
+                                                     <ArrowRight size={12} />
+                                                 </td>
+                                                 <td className="px-4 py-2.5 text-center text-slate-800 font-bold bg-green-50/30">
+                                                     {change.new || <span className="text-slate-300 italic">-</span>}
+                                                 </td>
+                                             </tr>
+                                         ))}
+                                     </tbody>
+                                 </table>
+                             ) : (
+                                 // Fallback si la estructura es antigua
+                                 <div className="p-4">
+                                     {isNew ? (
+                                         <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <p className="text-[10px] text-slate-400 uppercase">Email</p>
+                                                <p className="text-sm font-medium">{details.email || '-'}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-[10px] text-slate-400 uppercase">Puntos Iniciales</p>
+                                                <p className="text-sm font-bold text-green-600">{details.initialPoints || 0}</p>
+                                            </div>
+                                         </div>
+                                     ) : (
+                                         <ul className="space-y-2">
+                                            {(details.updates || []).map((field, idx) => (
+                                                <li key={idx} className="flex items-center gap-2 text-xs text-slate-600">
+                                                    <CheckCircle size={14} className="text-blue-500"/>
+                                                    Se actualizó el campo <span className="font-bold capitalize text-slate-800">{field}</span>
+                                                </li>
+                                            ))}
+                                            {(!details.updates || details.updates.length === 0) && (
+                                                <p className="text-xs text-slate-400 italic text-center">Sin detalles específicos registrados.</p>
+                                            )}
+                                         </ul>
+                                     )}
+                                 </div>
+                             )}
+                        </div>
+                    )}
+                    
+                    {isDelete && (
+                        <div className="bg-red-100 text-red-800 p-3 rounded-lg text-xs text-center font-medium border border-red-200">
+                            ⚠ El registro del socio fue eliminado permanentemente del sistema.
+                        </div>
+                    )}
+                </div>
             </div>
-            <div className="bg-slate-50 p-3 rounded border text-center">
-                <p className="text-[10px] text-slate-400 uppercase font-bold">N° Socio</p>
-                <p className="font-mono font-bold text-slate-700 text-lg">#{String(details.number).padStart(4,'0')}</p>
-            </div>
-            <p className="text-xs text-red-500 text-center italic">
-              Esta acción fue permanente y se borró el historial de puntos.
-            </p>
           </div>
         );
 
-      // --- ACCIONES EXISTENTES ---
+      // --- ACCIONES EXISTENTES (Manteniendo estilo consistente) ---
       case 'Venta Realizada': {
         const txId = getTransactionId(details);
         const items = details.items || [];
@@ -928,27 +972,27 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
 
         return (
           <div className="space-y-3">
-            <div className="border rounded-lg overflow-hidden">
-              <div className="bg-green-50 p-3 flex justify-between items-center border-b border-green-100">
-                <span className="font-bold text-green-800 text-sm">
-                  Venta #{txId}
+            <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+              <div className="bg-green-50 px-4 py-3 flex justify-between items-center border-b border-green-100">
+                <span className="font-bold text-green-800 text-sm flex items-center gap-2">
+                  <ShoppingCart size={16} /> Venta #{txId}
                 </span>
-                <span className="bg-green-600 text-white px-3 py-1 rounded-full text-sm font-bold">
+                <span className="bg-green-600 text-white px-3 py-1 rounded-full text-sm font-bold shadow-sm">
                   ${formatPrice(total)}
                 </span>
               </div>
-              <div className="p-3 bg-white">
-                <div className="flex items-center gap-4 mb-3 pb-2 border-b">
+              <div className="p-4 bg-white">
+                <div className="flex items-center gap-6 mb-4 pb-3 border-b border-slate-100">
                   <div>
-                    <p className="text-[10px] text-slate-400 uppercase font-bold">
+                    <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">
                       Método de Pago
                     </p>
-                    <p className="text-sm font-bold text-slate-700">
-                      {payment}
+                    <p className="text-sm font-bold text-slate-700 flex items-center gap-1">
+                      <CreditCard size={14} className="text-slate-400"/> {payment}
                     </p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-slate-400 uppercase font-bold">
+                    <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">
                       Productos
                     </p>
                     <p className="text-sm font-bold text-slate-700">
@@ -959,23 +1003,20 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                 <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">
                   Detalle de productos
                 </p>
-                <div className="space-y-1 max-h-40 overflow-y-auto">
+                <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
                   {items.map((item, idx) => (
                     <div
                       key={idx}
-                      className="text-xs flex justify-between items-center text-slate-600 bg-slate-50 p-2 rounded"
+                      className="text-xs flex justify-between items-center text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-100"
                     >
                       <span className="flex items-center gap-2">
-                        <span className="bg-slate-200 text-slate-700 px-2 py-0.5 rounded text-[10px] font-bold">
+                        <span className="bg-white border border-slate-200 text-slate-700 px-2 py-0.5 rounded text-[10px] font-bold">
                           {item.qty || item.quantity}x
                         </span>
-                        {item.title || item.name || 'Producto'}
+                        <span className="font-medium">{item.title || item.name || 'Producto'}</span>
                       </span>
                       <span className="font-bold text-slate-800">
-                        $
-                        {formatPrice(
-                          (item.price || 0) * (item.qty || item.quantity || 0)
-                        )}
+                        ${formatPrice((item.price || 0) * (item.qty || item.quantity || 0))}
                       </span>
                     </div>
                   ))}
@@ -993,32 +1034,32 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
 
         return (
           <div className="space-y-3">
-            <div className="border rounded-lg overflow-hidden">
-              <div className="bg-red-50 p-3 flex justify-between items-center border-b border-red-100">
+            <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+              <div className="bg-red-50 px-4 py-3 flex justify-between items-center border-b border-red-100">
                 <span className="font-bold text-red-800 text-sm flex items-center gap-2">
                   <XCircle size={16} /> Venta Anulada #{txId}
                 </span>
-                <span className="bg-red-100 px-3 py-1 rounded-full text-sm font-bold text-red-700 line-through">
+                <span className="bg-red-100 px-3 py-1 rounded-full text-sm font-bold text-red-700 line-through shadow-sm">
                   ${formatPrice(total)}
                 </span>
               </div>
-              <div className="p-3 bg-white">
+              <div className="p-4 bg-white">
                 <p className="text-[10px] font-bold text-green-600 uppercase mb-2 flex items-center gap-1">
                   <Package size={12} /> Productos devueltos al stock
                 </p>
-                <div className="space-y-1 max-h-40 overflow-y-auto">
+                <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
                   {itemsToShow.map((item, idx) => (
                     <div
                       key={idx}
-                      className="text-xs flex justify-between items-center text-slate-600 bg-green-50 p-2 rounded border border-green-100"
+                      className="text-xs flex justify-between items-center text-slate-600 bg-green-50 p-2.5 rounded-lg border border-green-100"
                     >
                       <span className="flex items-center gap-2">
                         <span className="bg-green-500 text-white px-2 py-0.5 rounded text-[10px] font-bold">
                           +{item.qty || item.quantity}
                         </span>
-                        {item.title || item.name || 'Producto'}
+                        <span className="font-medium">{item.title || item.name || 'Producto'}</span>
                       </span>
-                      <span className="text-green-600 font-bold">
+                      <span className="text-green-600 font-bold text-[10px] uppercase tracking-wide">
                         Restaurado
                       </span>
                     </div>
@@ -1026,9 +1067,9 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                 </div>
               </div>
             </div>
-            <div className="bg-amber-50 p-3 rounded-lg border border-amber-200 text-xs text-amber-700">
-              <span className="font-bold">Nota:</span> El stock fue restaurado
-              automáticamente.
+            <div className="bg-amber-50 p-3 rounded-xl border border-amber-200 text-xs text-amber-700 flex items-center gap-2">
+              <AlertTriangle size={14} className="shrink-0" />
+              <span><span className="font-bold">Nota:</span> El stock fue restaurado automáticamente.</span>
             </div>
           </div>
         );
@@ -1042,40 +1083,40 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
 
         return (
           <div className="space-y-4">
-            <div className="bg-blue-50 p-3 rounded-lg border border-blue-200 flex items-center justify-between">
-              <span className="text-xs font-bold text-blue-700">
+            <div className="bg-blue-50 p-3 rounded-xl border border-blue-200 flex items-center justify-between shadow-sm">
+              <span className="text-xs font-bold text-blue-700 uppercase tracking-wide">
                 Pedido Modificado
               </span>
-              <span className="bg-blue-600 text-white px-3 py-1 rounded-full text-sm font-bold">
+              <span className="bg-blue-600 text-white px-3 py-1 rounded-full text-sm font-bold shadow-sm">
                 #{txId}
               </span>
             </div>
 
             {Object.keys(changes).length > 0 && (
-              <div className="border rounded overflow-hidden">
-                <div className="bg-amber-50 px-3 py-2 text-[10px] font-bold text-amber-700 uppercase border-b">
-                  Cambios Realizados
+              <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                <div className="bg-amber-50 px-4 py-2.5 text-[10px] font-bold text-amber-700 uppercase border-b border-amber-100">
+                  Cambios Financieros
                 </div>
                 <table className="w-full text-xs">
-                  <tbody className="divide-y">
+                  <tbody className="divide-y divide-slate-100">
                     {Object.entries(changes).map(([key, val]) => (
                       <tr key={key}>
-                        <td className="px-3 py-2 font-bold text-slate-600 capitalize w-1/3">
+                        <td className="px-4 py-3 font-bold text-slate-600 capitalize w-1/3">
                           {key === 'total'
                             ? 'Monto Total'
                             : key === 'payment'
                             ? 'Método de Pago'
                             : key}
                         </td>
-                        <td className="px-3 py-2 text-red-500 line-through text-center bg-red-50">
+                        <td className="px-4 py-3 text-red-500 line-through text-center bg-red-50/50">
                           {key === 'total'
                             ? `$${formatPrice(val.old)}`
                             : val.old}
                         </td>
-                        <td className="px-3 py-2 text-center w-8 text-slate-300">
+                        <td className="px-2 py-3 text-center w-8 text-slate-300">
                           →
                         </td>
-                        <td className="px-3 py-2 text-green-600 font-bold text-center bg-green-50">
+                        <td className="px-4 py-3 text-green-600 font-bold text-center bg-green-50/50">
                           {key === 'total'
                             ? `$${formatPrice(val.new)}`
                             : val.new}
@@ -1088,29 +1129,29 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
             )}
 
             {productChanges.filter((c) => c.diff !== 0).length > 0 && (
-              <div className="border rounded overflow-hidden">
-                <div className="bg-purple-50 px-3 py-2 text-[10px] font-bold text-purple-700 uppercase border-b flex items-center gap-1">
+              <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                <div className="bg-purple-50 px-4 py-2.5 text-[10px] font-bold text-purple-700 uppercase border-b border-purple-100 flex items-center gap-1">
                   <Package size={12} /> Cambios en Productos
                 </div>
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="bg-slate-100 text-slate-500">
-                      <th className="px-3 py-2 text-left">Producto</th>
-                      <th className="px-3 py-2 text-center w-20">Antes</th>
-                      <th className="px-3 py-2 text-center w-8"></th>
-                      <th className="px-3 py-2 text-center w-20">Después</th>
-                      <th className="px-3 py-2 text-center w-20">Cambio</th>
+                    <tr className="bg-slate-50 text-slate-500 font-medium border-b border-slate-100">
+                      <th className="px-4 py-2 text-left">Producto</th>
+                      <th className="px-2 py-2 text-center w-16">Antes</th>
+                      <th className="px-1 py-2 text-center w-6"></th>
+                      <th className="px-2 py-2 text-center w-16">Después</th>
+                      <th className="px-2 py-2 text-center w-16">Cambio</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y">
+                  <tbody className="divide-y divide-slate-100">
                     {productChanges
                       .filter((c) => c.diff !== 0)
                       .map((change, idx) => (
                         <tr key={idx}>
-                          <td className="px-3 py-2 font-bold text-slate-700">
+                          <td className="px-4 py-2.5 font-bold text-slate-700">
                             {change.title}
                           </td>
-                          <td className="px-3 py-2 text-center text-red-500 bg-red-50">
+                          <td className="px-2 py-2.5 text-center text-red-500 bg-red-50/30">
                             {change.oldQty === 0 ? (
                               <span className="text-slate-400 italic text-[10px]">
                                 —
@@ -1121,10 +1162,10 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                               </span>
                             )}
                           </td>
-                          <td className="px-3 py-2 text-center text-slate-300">
-                            <ArrowRight size={14} />
+                          <td className="px-1 py-2.5 text-center text-slate-300">
+                            <ArrowRight size={12} />
                           </td>
-                          <td className="px-3 py-2 text-center text-green-600 bg-green-50 font-bold">
+                          <td className="px-2 py-2.5 text-center text-green-600 bg-green-50/30 font-bold">
                             {change.newQty === 0 ? (
                               <span className="text-red-500 text-[10px]">
                                 Eliminado
@@ -1133,7 +1174,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                               `${change.newQty}x`
                             )}
                           </td>
-                          <td className="px-3 py-2 text-center">
+                          <td className="px-2 py-2.5 text-center">
                             <span
                               className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                                 change.diff > 0
@@ -1154,22 +1195,21 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
             )}
 
             {itemsSnapshot.length > 0 && (
-              <div className="border rounded bg-slate-50 p-3">
+              <div className="border border-slate-200 rounded-xl bg-slate-50 p-4 shadow-sm">
                 <p className="text-[10px] font-bold text-slate-500 uppercase mb-2 flex items-center gap-1">
                   <List size={12} /> Estado Final del Pedido
                 </p>
-                <div className="space-y-1">
+                <div className="space-y-1.5">
                   {itemsSnapshot.map((item, idx) => (
                     <div
                       key={idx}
-                      className="text-xs flex justify-between bg-white p-2 border rounded shadow-sm"
+                      className="text-xs flex justify-between bg-white p-2.5 border border-slate-200 rounded-lg shadow-sm"
                     >
                       <span className="font-bold text-slate-700">
                         {item.qty}x {item.title || item.name}
                       </span>
-                      <span className="text-slate-500">
-                        $
-                        {formatPrice(
+                      <span className="text-slate-500 font-mono">
+                        ${formatPrice(
                           (Number(item.price) || 0) * (Number(item.qty) || 0)
                         )}
                       </span>
@@ -1188,26 +1228,26 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
 
         return (
           <div className="space-y-3">
-            <div className="bg-blue-50 p-3 rounded border border-blue-100 flex items-center gap-2">
-              <Package size={16} className="text-blue-600" />
+            <div className="bg-blue-50 p-3 rounded-xl border border-blue-200 flex items-center gap-3 shadow-sm">
+              <div className="bg-blue-200 p-1.5 rounded-full text-blue-700"><Package size={16} /></div>
               <span className="font-bold text-blue-800 text-sm">
                 {productName}
               </span>
             </div>
             {Object.keys(changes).length > 0 ? (
-              <table className="w-full text-xs border-collapse border rounded overflow-hidden">
+              <table className="w-full text-xs border-collapse border border-slate-200 rounded-xl overflow-hidden shadow-sm">
                 <thead>
-                  <tr className="bg-slate-100 text-slate-500">
-                    <th className="px-3 py-2 text-left w-1/3">Campo</th>
-                    <th className="px-3 py-2 text-center">Antes</th>
-                    <th className="px-3 py-2 text-center w-8"></th>
-                    <th className="px-3 py-2 text-center">Después</th>
+                  <tr className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200">
+                    <th className="px-4 py-2 text-left w-1/3">Campo</th>
+                    <th className="px-4 py-2 text-center">Antes</th>
+                    <th className="px-2 py-2 text-center w-8"></th>
+                    <th className="px-4 py-2 text-center">Después</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y border">
+                <tbody className="divide-y divide-slate-100">
                   {Object.entries(changes).map(([key, val]) => (
                     <tr key={key}>
-                      <td className="px-3 py-2 font-bold capitalize text-slate-700">
+                      <td className="px-4 py-3 font-bold capitalize text-slate-700">
                         {key === 'title'
                           ? 'Nombre'
                           : key === 'purchasePrice'
@@ -1220,15 +1260,15 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                           ? 'Categoría'
                           : key}
                       </td>
-                      <td className="px-3 py-2 text-center text-red-500 bg-red-50 line-through">
+                      <td className="px-4 py-3 text-center text-red-500 bg-red-50/50 line-through decoration-red-200">
                         {key.toLowerCase().includes('price')
                           ? `$${formatPrice(val.old)}`
                           : val.old}
                       </td>
-                      <td className="px-3 py-2 text-center text-slate-300">
+                      <td className="px-2 py-3 text-center text-slate-300">
                         <ArrowRight size={14} />
                       </td>
-                      <td className="px-3 py-2 text-center text-green-600 bg-green-50 font-bold">
+                      <td className="px-4 py-3 text-center text-green-600 bg-green-50/50 font-bold">
                         {key.toLowerCase().includes('price')
                           ? `$${formatPrice(val.new)}`
                           : val.new}
@@ -1238,9 +1278,9 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                 </tbody>
               </table>
             ) : (
-              <p className="text-slate-400 italic text-sm">
-                Sin cambios detallados registrados.
-              </p>
+              <div className="text-center p-4 bg-slate-50 rounded-xl border border-dashed border-slate-300">
+                 <p className="text-slate-400 italic text-sm">Sin cambios detallados registrados.</p>
+              </div>
             )}
           </div>
         );
@@ -1259,7 +1299,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
               </div>
             )}
             <div className="grid grid-cols-2 gap-3">
-              <div className="bg-slate-50 p-3 rounded-lg border">
+              <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
                 <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">
                   Caja Inicial
                 </p>
@@ -1267,7 +1307,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                   ${formatPrice(details.openingBalance)}
                 </p>
               </div>
-              <div className="bg-green-50 p-3 rounded-lg border border-green-200">
+              <div className="bg-green-50 p-3 rounded-xl border border-green-200 shadow-sm">
                 <p className="text-[10px] font-bold text-green-600 uppercase mb-1">
                   Ventas del Día
                 </p>
@@ -1276,13 +1316,13 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                 </p>
               </div>
             </div>
-            <div className="bg-slate-800 p-4 rounded-lg text-white">
+            <div className="bg-slate-800 p-5 rounded-xl text-white shadow-lg">
               <div className="flex justify-between items-center">
                 <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                     Total al Cierre
                   </p>
-                  <p className="text-2xl font-bold">
+                  <p className="text-3xl font-bold mt-1">
                     ${formatPrice(details.finalBalance)}
                   </p>
                 </div>
@@ -1290,27 +1330,27 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                   <p className="text-[10px] font-bold text-slate-400 uppercase">
                     Hora
                   </p>
-                  <p className="text-lg font-mono">
+                  <p className="text-xl font-mono text-white">
                     {details.closingTime || '-'}
                   </p>
                 </div>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="bg-blue-50 p-3 rounded-lg border border-blue-200 flex items-center justify-between">
-                <span className="text-xs font-bold text-blue-700">
+              <div className="bg-blue-50 p-3 rounded-xl border border-blue-200 flex items-center justify-between shadow-sm">
+                <span className="text-xs font-bold text-blue-700 uppercase">
                   Operaciones
                 </span>
-                <span className="bg-blue-600 text-white px-3 py-1 rounded-full text-sm font-bold">
+                <span className="bg-blue-600 text-white px-3 py-1 rounded-full text-sm font-bold shadow-sm">
                   {details.salesCount || 0}
                 </span>
               </div>
               {details.scheduledClosingTime && (
-                <div className="bg-amber-50 p-3 rounded-lg border border-amber-200 flex items-center justify-between">
-                  <span className="text-xs font-bold text-amber-700">
+                <div className="bg-amber-50 p-3 rounded-xl border border-amber-200 flex items-center justify-between shadow-sm">
+                  <span className="text-xs font-bold text-amber-700 uppercase">
                     Programado
                   </span>
-                  <span className="bg-amber-600 text-white px-3 py-1 rounded-full text-sm font-bold">
+                  <span className="bg-amber-600 text-white px-3 py-1 rounded-full text-sm font-bold shadow-sm">
                     {details.scheduledClosingTime}
                   </span>
                 </div>
@@ -1323,30 +1363,30 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
       case 'Apertura de Caja': {
         return (
           <div className="space-y-3">
-            <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-green-600 rounded-full flex items-center justify-center">
-                  <DollarSign size={24} className="text-white" />
+            <div className="bg-green-50 p-5 rounded-xl border border-green-200 shadow-sm">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center text-white shadow-sm">
+                  <DollarSign size={24} />
                 </div>
                 <div>
-                  <p className="text-[10px] font-bold text-green-600 uppercase">
-                    Monto Inicial
+                  <p className="text-[10px] font-bold text-green-600 uppercase tracking-wider">
+                    Monto Inicial en Caja
                   </p>
-                  <p className="text-2xl font-bold text-green-800">
+                  <p className="text-3xl font-bold text-green-800">
                     ${formatPrice(details.amount)}
                   </p>
                 </div>
               </div>
             </div>
             {details.scheduledClosingTime && (
-              <div className="bg-blue-50 p-3 rounded-lg border border-blue-200 flex items-center justify-between">
+              <div className="bg-blue-50 p-3 rounded-xl border border-blue-200 flex items-center justify-between shadow-sm">
                 <div className="flex items-center gap-2">
                   <Clock size={16} className="text-blue-600" />
-                  <span className="text-xs font-bold text-blue-700">
+                  <span className="text-xs font-bold text-blue-700 uppercase">
                     Cierre Programado
                   </span>
                 </div>
-                <span className="bg-blue-600 text-white px-3 py-1 rounded-full text-sm font-bold">
+                <span className="bg-blue-600 text-white px-3 py-1 rounded-full text-sm font-bold shadow-sm">
                   {details.scheduledClosingTime}
                 </span>
               </div>
@@ -1363,7 +1403,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
         return (
           <div className="space-y-3">
             <div
-              className={`p-4 rounded-lg border flex items-center gap-3 ${
+              className={`p-5 rounded-xl border flex items-center gap-4 shadow-sm ${
                 isCreate
                   ? 'bg-green-50 border-green-200'
                   : isDelete
@@ -1372,7 +1412,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
               }`}
             >
               <div
-                className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                className={`w-12 h-12 rounded-full flex items-center justify-center text-white shadow-sm ${
                   isCreate
                     ? 'bg-green-500'
                     : isDelete
@@ -1380,11 +1420,11 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                     : 'bg-blue-500'
                 }`}
               >
-                <Tag size={24} className="text-white" />
+                <Tag size={24} />
               </div>
-              <div>
+              <div className="flex-1">
                 <p
-                  className={`text-[10px] font-bold uppercase ${
+                  className={`text-[10px] font-bold uppercase tracking-wide ${
                     isCreate
                       ? 'text-green-600'
                       : isDelete
@@ -1399,17 +1439,17 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                     : 'Categoría Renombrada'}
                 </p>
                 {isEdit && details.oldName ? (
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg text-red-400 line-through">
+                  <div className="flex items-center gap-3 mt-1">
+                    <span className="text-lg text-red-400 line-through decoration-2">
                       {details.oldName}
                     </span>
-                    <ArrowRight size={18} className="text-slate-400" />
+                    <ArrowRight size={20} className="text-slate-400" />
                     <span className="text-xl font-bold text-slate-800">
                       {details.name}
                     </span>
                   </div>
                 ) : (
-                  <p className="text-xl font-bold text-slate-800">
+                  <p className="text-xl font-bold text-slate-800 mt-1">
                     {details.name}
                   </p>
                 )}
@@ -1422,65 +1462,65 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
       case 'Alta de Producto': {
         return (
           <div className="space-y-3">
-            <div className="bg-green-50 p-3 rounded-lg border border-green-200 flex items-center gap-2">
-              <Package size={18} className="text-green-600" />
+            <div className="bg-green-50 p-3 rounded-xl border border-green-200 flex items-center gap-3 shadow-sm">
+              <div className="bg-green-200 p-1.5 rounded-full text-green-700"><Package size={16} /></div>
               <span className="font-bold text-green-800 text-sm">
                 Nuevo Producto Registrado
               </span>
             </div>
-            <div className="border rounded-lg overflow-hidden">
+            <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
               <table className="w-full text-xs">
-                <tbody className="divide-y">
+                <tbody className="divide-y divide-slate-100">
                   <tr className="bg-slate-50">
-                    <td className="px-3 py-2 font-bold text-slate-500 w-1/3">
+                    <td className="px-4 py-3 font-bold text-slate-500 w-1/3 uppercase text-[10px]">
                       Nombre
                     </td>
-                    <td className="px-3 py-2 font-bold text-slate-800">
+                    <td className="px-4 py-3 font-bold text-slate-800 text-sm">
                       {details.title || details.name || '-'}
                     </td>
                   </tr>
                   {details.brand && (
                     <tr>
-                      <td className="px-3 py-2 font-bold text-slate-500">
+                      <td className="px-4 py-3 font-bold text-slate-500 uppercase text-[10px]">
                         Marca
                       </td>
-                      <td className="px-3 py-2 text-slate-700">
+                      <td className="px-4 py-3 text-slate-700 font-medium">
                         {details.brand}
                       </td>
                     </tr>
                   )}
                   <tr className="bg-slate-50">
-                    <td className="px-3 py-2 font-bold text-slate-500">
+                    <td className="px-4 py-3 font-bold text-slate-500 uppercase text-[10px]">
                       Categoría
                     </td>
-                    <td className="px-3 py-2">
-                      <span className="bg-fuchsia-100 text-fuchsia-700 px-2 py-0.5 rounded text-[10px] font-bold">
+                    <td className="px-4 py-3">
+                      <span className="bg-fuchsia-100 text-fuchsia-700 px-2 py-0.5 rounded-md text-[10px] font-bold border border-fuchsia-200">
                         {details.category || 'Sin categoría'}
                       </span>
                     </td>
                   </tr>
                   <tr>
-                    <td className="px-3 py-2 font-bold text-slate-500">
+                    <td className="px-4 py-3 font-bold text-slate-500 uppercase text-[10px]">
                       Precio Costo
                     </td>
-                    <td className="px-3 py-2 text-slate-600">
+                    <td className="px-4 py-3 text-slate-600 font-mono">
                       ${formatPrice(details.purchasePrice)}
                     </td>
                   </tr>
                   <tr className="bg-slate-50">
-                    <td className="px-3 py-2 font-bold text-slate-500">
+                    <td className="px-4 py-3 font-bold text-slate-500 uppercase text-[10px]">
                       Precio Venta
                     </td>
-                    <td className="px-3 py-2 font-bold text-green-600">
+                    <td className="px-4 py-3 font-bold text-green-600 font-mono text-sm">
                       ${formatPrice(details.price)}
                     </td>
                   </tr>
                   <tr>
-                    <td className="px-3 py-2 font-bold text-slate-500">
+                    <td className="px-4 py-3 font-bold text-slate-500 uppercase text-[10px]">
                       Stock Inicial
                     </td>
-                    <td className="px-3 py-2">
-                      <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-bold">
+                    <td className="px-4 py-3">
+                      <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-md font-bold text-xs border border-blue-200">
                         {details.stock || 0} unidades
                       </span>
                     </td>
@@ -1495,54 +1535,54 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
       case 'Baja Producto': {
         return (
           <div className="space-y-3">
-            <div className="bg-red-50 p-3 rounded-lg border border-red-200 flex items-center gap-2">
-              <Trash2 size={18} className="text-red-600" />
+            <div className="bg-red-50 p-3 rounded-xl border border-red-200 flex items-center gap-3 shadow-sm">
+              <div className="bg-red-200 p-1.5 rounded-full text-red-700"><Trash2 size={16} /></div>
               <span className="font-bold text-red-800 text-sm">
                 Producto Eliminado
               </span>
             </div>
-            <div className="border rounded-lg overflow-hidden">
+            <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
               <table className="w-full text-xs">
-                <tbody className="divide-y">
+                <tbody className="divide-y divide-slate-100">
                   <tr className="bg-slate-50">
-                    <td className="px-3 py-2 font-bold text-slate-500 w-1/3">
+                    <td className="px-4 py-3 font-bold text-slate-500 w-1/3 uppercase text-[10px]">
                       Nombre
                     </td>
-                    <td className="px-3 py-2 font-bold text-slate-800">
+                    <td className="px-4 py-3 font-bold text-slate-800 text-sm">
                       {details.title || details.name || '-'}
                     </td>
                   </tr>
                   {details.brand && (
                     <tr>
-                      <td className="px-3 py-2 font-bold text-slate-500">
+                      <td className="px-4 py-3 font-bold text-slate-500 uppercase text-[10px]">
                         Marca
                       </td>
-                      <td className="px-3 py-2 text-slate-700">
+                      <td className="px-4 py-3 text-slate-700 font-medium">
                         {details.brand}
                       </td>
                     </tr>
                   )}
                   <tr className="bg-slate-50">
-                    <td className="px-3 py-2 font-bold text-slate-500">
+                    <td className="px-4 py-3 font-bold text-slate-500 uppercase text-[10px]">
                       Categoría
                     </td>
-                    <td className="px-3 py-2 text-slate-600">
+                    <td className="px-4 py-3 text-slate-600 font-medium">
                       {details.category || '-'}
                     </td>
                   </tr>
                   <tr>
-                    <td className="px-3 py-2 font-bold text-slate-500">
+                    <td className="px-4 py-3 font-bold text-slate-500 uppercase text-[10px]">
                       Precio
                     </td>
-                    <td className="px-3 py-2 text-slate-600">
+                    <td className="px-4 py-3 text-slate-600 font-mono">
                       ${formatPrice(details.price)}
                     </td>
                   </tr>
                   <tr className="bg-red-50">
-                    <td className="px-3 py-2 font-bold text-red-500">
+                    <td className="px-4 py-3 font-bold text-red-500 uppercase text-[10px]">
                       Stock al eliminar
                     </td>
-                    <td className="px-3 py-2 font-bold text-red-600">
+                    <td className="px-4 py-3 font-bold text-red-600 text-sm">
                       {details.stock || 0} unidades
                     </td>
                   </tr>
@@ -1555,13 +1595,13 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
 
       case 'Horario Modificado': {
         return (
-          <div className="bg-amber-50 p-4 rounded-lg border border-amber-200 flex items-center gap-3">
-            <div className="w-12 h-12 bg-amber-600 rounded-full flex items-center justify-center">
-              <Clock size={24} className="text-white" />
+          <div className="bg-amber-50 p-5 rounded-xl border border-amber-200 flex items-center gap-4 shadow-sm">
+            <div className="w-12 h-12 bg-amber-500 rounded-full flex items-center justify-center text-white shadow-sm">
+              <Clock size={24} />
             </div>
             <div>
-              <p className="text-[10px] font-bold text-amber-600 uppercase">
-                Nuevo Horario
+              <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wide">
+                Nuevo Horario Establecido
               </p>
               <p className="text-lg font-bold text-slate-800">
                 {typeof details === 'string' ? details : 'Horario actualizado'}
@@ -1573,13 +1613,13 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
 
       case 'Sistema Iniciado': {
         return (
-          <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 flex items-center gap-3">
-            <div className="w-12 h-12 bg-slate-600 rounded-full flex items-center justify-center">
-              <Power size={24} className="text-white" />
+          <div className="bg-slate-50 p-5 rounded-xl border border-slate-200 flex items-center gap-4 shadow-sm">
+            <div className="w-12 h-12 bg-slate-600 rounded-full flex items-center justify-center text-white shadow-sm">
+              <Power size={24} />
             </div>
             <div>
-              <p className="text-[10px] font-bold text-slate-500 uppercase">
-                Estado
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">
+                Estado del Sistema
               </p>
               <p className="text-lg font-bold text-slate-800">
                 Sistema inicializado correctamente
@@ -1591,12 +1631,12 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
 
       case 'Borrado Permanente': {
         return (
-          <div className="bg-red-50 p-4 rounded-lg border border-red-200 flex items-center gap-3">
-            <div className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center">
-              <Trash2 size={24} className="text-white" />
+          <div className="bg-red-50 p-5 rounded-xl border border-red-200 flex items-center gap-4 shadow-sm">
+            <div className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center text-white shadow-sm">
+              <Trash2 size={24} />
             </div>
             <div>
-              <p className="text-[10px] font-bold text-red-600 uppercase">
+              <p className="text-[10px] font-bold text-red-600 uppercase tracking-wide">
                 Registro Eliminado
               </p>
               <p className="text-lg font-bold text-slate-800">
@@ -1614,12 +1654,12 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
         
         return (
           <div className="space-y-3">
-            <div className="bg-fuchsia-50 p-4 rounded-lg border border-fuchsia-200 flex items-center gap-3">
-              <div className="w-12 h-12 bg-fuchsia-600 rounded-full flex items-center justify-center">
-                <Tag size={24} className="text-white" />
+            <div className="bg-fuchsia-50 p-5 rounded-xl border border-fuchsia-200 flex items-center gap-4 shadow-sm">
+              <div className="w-12 h-12 bg-fuchsia-600 rounded-full flex items-center justify-center text-white shadow-sm">
+                <Tag size={24} />
               </div>
               <div>
-                <p className="text-[10px] font-bold text-fuchsia-600 uppercase">
+                <p className="text-[10px] font-bold text-fuchsia-600 uppercase tracking-wide">
                   Actualización en Lote
                 </p>
                 <p className="text-lg font-bold text-slate-800">
@@ -1628,17 +1668,17 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
               </div>
             </div>
 
-            <div className="border rounded-lg overflow-hidden">
-               <div className="bg-slate-100 px-3 py-2 border-b">
+            <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+               <div className="bg-slate-50 px-4 py-2 border-b border-slate-200">
                  <p className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1">
                    <List size={14}/> Detalle de operaciones
                  </p>
                </div>
-               <ul className="divide-y bg-white max-h-60 overflow-y-auto">
+               <ul className="divide-y divide-slate-100 bg-white max-h-60 overflow-y-auto">
                  {changeList.map((item, idx) => {
                    const isAdd = item.includes('Agregado');
                    return (
-                     <li key={idx} className="px-3 py-2 text-xs flex items-center gap-2">
+                     <li key={idx} className="px-4 py-2.5 text-xs flex items-center gap-2">
                         <CheckCircle size={14} className={isAdd ? "text-green-500" : "text-red-500"} />
                         <span className="text-slate-700">{item}</span>
                      </li>
@@ -1658,28 +1698,27 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
           const items = details.items || [];
           return (
             <div className="space-y-3">
-              <div className="border rounded-lg overflow-hidden">
-                <div className="bg-green-50 p-3 flex justify-between items-center border-b border-green-100">
+              <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                <div className="bg-green-50 px-4 py-3 flex justify-between items-center border-b border-green-100">
                   <span className="font-bold text-green-800 text-sm">
                     Venta #{txId}
                   </span>
-                  <span className="bg-green-600 text-white px-3 py-1 rounded-full text-sm font-bold">
+                  <span className="bg-green-600 text-white px-3 py-1 rounded-full text-sm font-bold shadow-sm">
                     ${formatPrice(details.total)}
                   </span>
                 </div>
-                <div className="p-3 bg-white">
-                  <div className="space-y-1 max-h-40 overflow-y-auto">
+                <div className="p-4 bg-white">
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                     {items.map((item, idx) => (
                       <div
                         key={idx}
-                        className="text-xs flex justify-between items-center text-slate-600 bg-slate-50 p-2 rounded"
+                        className="text-xs flex justify-between items-center text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-100"
                       >
-                        <span>
+                        <span className="font-medium">
                           {item.qty || item.quantity}x {item.title || item.name}
                         </span>
-                        <span className="font-bold">
-                          $
-                          {formatPrice(
+                        <span className="font-bold text-slate-800">
+                          ${formatPrice(
                             (item.price || 0) * (item.qty || item.quantity || 0)
                           )}
                         </span>
@@ -1697,31 +1736,30 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
           const txId = getTransactionId(details);
           return (
             <div className="space-y-4">
-              <div className="bg-blue-50 p-3 rounded-lg border border-blue-200 flex items-center justify-between">
-                <span className="text-xs font-bold text-blue-700">
+              <div className="bg-blue-50 p-3 rounded-xl border border-blue-200 flex items-center justify-between shadow-sm">
+                <span className="text-xs font-bold text-blue-700 uppercase">
                   Pedido Modificado
                 </span>
-                <span className="bg-blue-600 text-white px-3 py-1 rounded-full text-sm font-bold">
+                <span className="bg-blue-600 text-white px-3 py-1 rounded-full text-sm font-bold shadow-sm">
                   #{txId}
                 </span>
               </div>
               {details.itemsSnapshot && details.itemsSnapshot.length > 0 && (
-                <div className="border rounded bg-slate-50 p-3">
+                <div className="border border-slate-200 rounded-xl bg-slate-50 p-4 shadow-sm">
                   <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">
                     Estado Final
                   </p>
-                  <div className="space-y-1">
+                  <div className="space-y-1.5">
                     {details.itemsSnapshot.map((item, idx) => (
                       <div
                         key={idx}
-                        className="text-xs flex justify-between bg-white p-2 border rounded"
+                        className="text-xs flex justify-between bg-white p-2.5 border border-slate-200 rounded-lg shadow-sm"
                       >
-                        <span>
+                        <span className="font-medium">
                           {item.qty}x {item.title || item.name}
                         </span>
-                        <span>
-                          $
-                          {formatPrice(
+                        <span className="font-mono text-slate-600">
+                          ${formatPrice(
                             (Number(item.price) || 0) * (Number(item.qty) || 0)
                           )}
                         </span>
@@ -1736,7 +1774,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
 
         // Último recurso: mostrar JSON
         return (
-          <div className="bg-slate-900 rounded-lg p-3 overflow-x-auto">
+          <div className="bg-slate-900 rounded-xl p-4 overflow-x-auto border border-slate-700 shadow-inner">
             <pre className="text-xs text-green-400 font-mono whitespace-pre-wrap">
               {JSON.stringify(details, null, 2)}
             </pre>
@@ -1748,27 +1786,27 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
 
   const getDetailTitle = (action) => {
     const titles = {
-      'Venta Realizada': 'Detalles de la Venta',
-      'Venta Anulada': 'Detalles de la Anulación',
-      'Apertura de Caja': 'Detalles de Caja',
-      'Cierre de Caja': 'Detalles de Caja',
-      'Cierre Automático': 'Detalles de Caja',
-      'Edición Producto': 'Cambios en el Producto',
-      'Modificación Pedido': 'Cambios en el Pedido',
-      'Alta de Producto': 'Datos del Producto',
-      'Baja Producto': 'Producto Eliminado',
-      Categoría: 'Detalles de la Categoría',
+      'Venta Realizada': 'Detalle de Transacción',
+      'Venta Anulada': 'Anulación de Venta',
+      'Apertura de Caja': 'Reporte de Apertura',
+      'Cierre de Caja': 'Reporte de Cierre',
+      'Cierre Automático': 'Reporte Automático',
+      'Edición Producto': 'Modificación de Inventario',
+      'Modificación Pedido': 'Ajuste de Pedido',
+      'Alta de Producto': 'Ingreso de Producto',
+      'Baja Producto': 'Egreso de Producto',
+      Categoría: 'Gestión de Categorías',
       'Horario Modificado': 'Cambio de Horario',
       'Sistema Iniciado': 'Información del Sistema',
       'Borrado Permanente': 'Registro Eliminado',
       'Edición Masiva Categorías': 'Reporte de Cambios Masivos',
       // NUEVOS TÍTULOS
-      'Nuevo Socio': 'Información del Nuevo Socio',
-      'Edición de Puntos': 'Detalle de Ajuste de Saldo',
-      'Edición de Socio': 'Resumen de Cambios',
-      'Baja de Socio': 'Información del Socio Eliminado'
+      'Nuevo Socio': 'Ficha de Nuevo Socio',
+      'Edición de Puntos': 'Movimiento de Puntos',
+      'Edición de Socio': 'Actualización de Perfil',
+      'Baja de Socio': 'Eliminación de Registro'
     };
-    return titles[action] || 'Detalles';
+    return titles[action] || 'Detalles del Registro';
   };
 
   // =====================================================
@@ -1952,24 +1990,24 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border overflow-hidden h-full flex flex-col">
-      <div className="p-3 border-b bg-slate-50 shrink-0">
+    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden h-full flex flex-col">
+      <div className="p-3 border-b border-slate-200 bg-slate-50 shrink-0">
         <div className="flex justify-between items-center mb-3">
           <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm">
-            <FileText size={16} className="text-amber-600" /> Registro de
-            Acciones
+            <div className="bg-amber-100 p-1.5 rounded-lg text-amber-600"><FileText size={16} /></div> 
+             Registro de Acciones
           </h3>
           <div className="flex items-center gap-2">
             {hasActiveFilters && (
               <button
                 onClick={clearAllFilters}
-                className="flex items-center gap-1 px-2 py-1 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+                className="flex items-center gap-1 px-2 py-1 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors border border-red-100"
               >
                 <FilterX size={12} /> Limpiar
               </button>
             )}
-            <span className="text-xs bg-slate-200 px-2 py-0.5 rounded text-slate-600 font-bold">
-              {sortedLogs.length}
+            <span className="text-xs bg-white border border-slate-200 px-2 py-0.5 rounded-lg text-slate-600 font-bold shadow-sm">
+              {sortedLogs.length} reg
             </span>
           </div>
         </div>
@@ -1979,13 +2017,13 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
           <div className="flex gap-2 mb-3">
             <button
               onClick={() => setShowGeneratorModal(true)}
-              className="flex items-center gap-2 px-3 py-1.5 bg-amber-500 text-white rounded-lg text-xs font-bold hover:bg-amber-600 transition"
+              className="flex items-center gap-2 px-3 py-1.5 bg-amber-500 text-white rounded-lg text-xs font-bold hover:bg-amber-600 transition shadow-sm hover:shadow-md"
             >
               <Wand2 size={14} /> Generar Acciones de Prueba
             </button>
             <button
               onClick={() => setShowDeleteModal(true)}
-              className="flex items-center gap-2 px-3 py-1.5 bg-red-500 text-white rounded-lg text-xs font-bold hover:bg-red-600 transition"
+              className="flex items-center gap-2 px-3 py-1.5 bg-red-500 text-white rounded-lg text-xs font-bold hover:bg-red-600 transition shadow-sm hover:shadow-md"
             >
               <Trash2 size={14} /> Limpiar Registro
             </button>
@@ -2005,7 +2043,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
               />
               <input
                 type="date"
-                className="w-full pl-7 pr-1 py-1.5 text-xs border rounded-md focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none bg-white"
+                className="w-full pl-7 pr-1 py-1.5 text-xs border border-slate-200 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none bg-white transition-all"
                 value={filterDateStart}
                 onChange={(e) => setFilterDateStart(e.target.value)}
               />
@@ -2024,7 +2062,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
               />
               <input
                 type="date"
-                className="w-full pl-7 pr-1 py-1.5 text-xs border rounded-md focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none bg-white"
+                className="w-full pl-7 pr-1 py-1.5 text-xs border border-slate-200 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none bg-white transition-all"
                 value={filterDateEnd}
                 onChange={(e) => setFilterDateEnd(e.target.value)}
               />
@@ -2042,7 +2080,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                 className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
               />
               <select
-                className="w-full pl-7 pr-6 py-1.5 text-xs border rounded-md focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none bg-white appearance-none cursor-pointer"
+                className="w-full pl-7 pr-6 py-1.5 text-xs border border-slate-200 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none bg-white appearance-none cursor-pointer transition-all"
                 value={filterUser}
                 onChange={(e) => setFilterUser(e.target.value)}
               >
@@ -2069,7 +2107,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                 className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
               />
               <select
-                className="w-full pl-7 pr-6 py-1.5 text-xs border rounded-md focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none bg-white appearance-none cursor-pointer"
+                className="w-full pl-7 pr-6 py-1.5 text-xs border border-slate-200 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none bg-white appearance-none cursor-pointer transition-all"
                 value={filterAction}
                 onChange={(e) => setFilterAction(e.target.value)}
               >
@@ -2100,7 +2138,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
               <input
                 type="text"
                 placeholder="Producto, ID, monto..."
-                className="w-full pl-7 pr-2 py-1.5 text-xs border rounded-md focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none bg-white"
+                className="w-full pl-7 pr-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none bg-white transition-all"
                 value={filterSearch}
                 onChange={(e) => setFilterSearch(e.target.value)}
               />
@@ -2110,11 +2148,11 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        <table className="w-full text-xs text-left">
-          <thead className="bg-slate-100 text-slate-500 font-medium sticky top-0 shadow-sm z-10">
+        <table className="w-full text-xs text-left border-collapse">
+          <thead className="bg-slate-50 text-slate-500 font-medium sticky top-0 shadow-sm z-10 border-b border-slate-200">
             <tr>
               <th
-                className="px-4 py-3 w-36 cursor-pointer hover:bg-slate-200 transition-colors select-none"
+                className="px-4 py-3 w-36 cursor-pointer hover:bg-slate-100 transition-colors select-none"
                 onClick={() => handleSort('datetime')}
               >
                 <div className="flex items-center gap-1">
@@ -2124,7 +2162,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                 </div>
               </th>
               <th
-                className="px-4 py-3 w-24 cursor-pointer hover:bg-slate-200 transition-colors select-none"
+                className="px-4 py-3 w-28 cursor-pointer hover:bg-slate-100 transition-colors select-none"
                 onClick={() => handleSort('user')}
               >
                 <div className="flex items-center gap-1">
@@ -2133,7 +2171,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                 </div>
               </th>
               <th
-                className="px-4 py-3 w-40 cursor-pointer hover:bg-slate-200 transition-colors select-none"
+                className="px-4 py-3 w-40 cursor-pointer hover:bg-slate-100 transition-colors select-none"
                 onClick={() => handleSort('action')}
               >
                 <div className="flex items-center gap-1">
@@ -2145,12 +2183,12 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
               <th className="px-4 py-3 w-12 text-center">Info</th>
             </tr>
           </thead>
-          <tbody className="divide-y">
+          <tbody className="divide-y divide-slate-100">
             {sortedLogs.map((log) => (
-              <tr key={log.id} className="hover:bg-amber-50 transition-colors">
-                <td className="px-4 py-2">
+              <tr key={log.id} className="hover:bg-amber-50/60 transition-colors group">
+                <td className="px-4 py-3">
                   <div className="flex flex-col">
-                    <span className="text-slate-700 font-medium">
+                    <span className="text-slate-700 font-bold">
                       {log.date || '-'}
                     </span>
                     <span className="text-slate-400 font-mono text-[10px]">
@@ -2158,27 +2196,27 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                     </span>
                   </div>
                 </td>
-                <td className="px-4 py-2">
+                <td className="px-4 py-3">
                   <span
-                    className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
+                    className={`px-2 py-1 rounded-md font-bold text-[10px] border shadow-sm ${
                       log.user === 'Dueño'
-                        ? 'bg-blue-100 text-blue-700'
+                        ? 'bg-indigo-50 text-indigo-700 border-indigo-100'
                         : log.user === 'Sistema'
-                        ? 'bg-slate-100 text-slate-600'
-                        : 'bg-green-100 text-green-700'
+                        ? 'bg-slate-100 text-slate-600 border-slate-200'
+                        : 'bg-emerald-50 text-emerald-700 border-emerald-100'
                     }`}
                   >
                     {log.user}
                   </span>
                 </td>
-                <td className="px-4 py-2 font-bold text-slate-700 text-[11px]">
+                <td className="px-4 py-3 font-bold text-slate-700 text-[11px]">
                   {log.action}
                 </td>
-                <td className="px-4 py-2">{getSummary(log)}</td>
-                <td className="px-4 py-2 text-center">
+                <td className="px-4 py-3">{getSummary(log)}</td>
+                <td className="px-4 py-3 text-center">
                   <button
                     onClick={() => setSelectedLog(log)}
-                    className="text-amber-600 hover:bg-amber-100 p-1.5 rounded transition-colors"
+                    className="text-slate-300 hover:text-amber-600 hover:bg-amber-100 p-2 rounded-lg transition-all transform hover:scale-110"
                   >
                     <Eye size={16} />
                   </button>
@@ -2187,8 +2225,11 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
             ))}
             {sortedLogs.length === 0 && (
               <tr>
-                <td colSpan={5} className="text-center py-10 text-slate-400">
-                  No se encontraron registros.
+                <td colSpan={5} className="text-center py-12 text-slate-400">
+                  <div className="flex flex-col items-center gap-2">
+                    <Search size={32} className="text-slate-200" />
+                    <p>No se encontraron registros que coincidan.</p>
+                  </div>
                 </td>
               </tr>
             )}
@@ -2196,79 +2237,77 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
         </table>
       </div>
 
+      {/* MODAL DETALLE REFINADO */}
       {selectedLog && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="p-4 border-b bg-amber-50 flex justify-between items-center">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-[60] p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200 border border-slate-100">
+            {/* Header Modal */}
+            <div className="p-4 border-b border-slate-100 bg-slate-50/80 flex justify-between items-center">
               <div>
-                <h3 className="font-bold text-slate-800 text-lg">
-                  Detalle de Registro
+                <h3 className="font-bold text-slate-800 text-base">
+                  {getDetailTitle(selectedLog.action)}
                 </h3>
-                <p className="text-xs text-slate-500">ID: {selectedLog.id}</p>
+                <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
+                    <Clock size={12} /> {selectedLog.date} {selectedLog.timestamp}
+                    <span className="text-slate-300">|</span>
+                    ID: {selectedLog.id}
+                </div>
               </div>
               <button
                 onClick={() => setSelectedLog(null)}
-                className="text-slate-400 hover:text-slate-600"
+                className="text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 p-2 rounded-full transition-colors"
               >
-                <X size={24} />
+                <X size={20} />
               </button>
             </div>
-            <div className="p-6 overflow-y-auto space-y-4">
-              <div className="grid grid-cols-2 gap-4 bg-slate-50 p-3 rounded-lg border">
-                <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase">
-                    Usuario
-                  </p>
-                  <p className="font-medium text-slate-800">
-                    {selectedLog.user}
-                  </p>
+            
+            {/* Body Scrollable */}
+            <div className="p-6 overflow-y-auto space-y-5 custom-scrollbar">
+               {/* Metadata Grid */}
+               <div className="grid grid-cols-2 gap-4">
+                   <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                       <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Responsable</p>
+                       <div className="flex items-center gap-2">
+                           <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-slate-500">
+                               <User size={14} />
+                           </div>
+                           <span className="font-bold text-slate-700 text-sm">{selectedLog.user}</span>
+                       </div>
+                   </div>
+                   <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                       <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Tipo de Acción</p>
+                       <span className="font-bold text-slate-700 text-sm">{selectedLog.action}</span>
+                   </div>
+               </div>
+
+               {/* Nota / Razón */}
+               {selectedLog.reason ? (
+                <div className="bg-amber-50 border border-amber-100 p-3 rounded-xl flex gap-3">
+                    <div className="mt-0.5 text-amber-500"><FileText size={16} /></div>
+                    <div>
+                        <p className="text-[10px] font-bold text-amber-600 uppercase">Observación</p>
+                        <p className="text-sm text-slate-700 italic">"{selectedLog.reason}"</p>
+                    </div>
                 </div>
-                <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase">
-                    Fecha
-                  </p>
-                  <p className="font-medium text-slate-800">
-                    {selectedLog.date} {selectedLog.timestamp}
-                  </p>
+               ) : (
+                <div className="bg-slate-50 border border-slate-100 border-dashed p-2 rounded-xl text-center">
+                    <p className="text-[10px] text-slate-400 italic">Sin nota adicional registrada.</p>
                 </div>
-                <div className="col-span-2">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase">
-                    Acción
-                  </p>
-                  <p className="font-bold text-amber-700">
-                    {selectedLog.action}
-                  </p>
-                </div>
-              </div>
-              {selectedLog.reason ? (
-                <div className="bg-yellow-50 border border-yellow-200 p-3 rounded-lg">
-                  <p className="text-[10px] font-bold text-yellow-600 uppercase mb-1 flex items-center gap-1">
-                    <FileText size={12} /> Nota
-                  </p>
-                  <p className="text-sm text-slate-800 italic">
-                    "{selectedLog.reason}"
-                  </p>
-                </div>
-              ) : (
-                <div className="bg-slate-50 border border-slate-100 p-2 rounded-lg text-center">
-                  <p className="text-[10px] text-slate-400 italic">
-                    Sin nota adicional
-                  </p>
-                </div>
-              )}
-              <div className="border-t pt-4">
-                <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">
-                  {getDetailTitle(selectedLog.action)}
-                </p>
-                <RenderDetailContent log={selectedLog} />
-              </div>
+               )}
+
+               {/* Contenido Específico Renderizado */}
+               <div className="pt-2">
+                  <RenderDetailContent log={selectedLog} />
+               </div>
             </div>
-            <div className="p-4 border-t bg-slate-50 text-right shrink-0">
+
+            {/* Footer */}
+            <div className="p-4 border-t border-slate-100 bg-slate-50/50 text-right shrink-0">
               <button
                 onClick={() => setSelectedLog(null)}
-                className="bg-slate-800 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-slate-700"
+                className="bg-slate-800 text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-slate-700 transition-colors shadow-lg shadow-slate-200"
               >
-                Cerrar
+                Cerrar Detalle
               </button>
             </div>
           </div>
@@ -2277,9 +2316,9 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
 
       {/* Modal Generador */}
       {showGeneratorModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
-            <div className="p-4 border-b flex justify-between items-center bg-amber-500">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full animate-in zoom-in-95">
+            <div className="p-4 border-b flex justify-between items-center bg-amber-500 rounded-t-xl">
               <h4 className="font-bold text-white flex items-center gap-2">
                 <Wand2 size={18} /> Generar Acciones de Prueba
               </h4>
@@ -2299,7 +2338,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                   type="number"
                   min="1"
                   max="200"
-                  className="w-full px-3 py-2 border rounded-lg text-sm"
+                  className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-amber-500"
                   value={generatorConfig.count}
                   onChange={(e) =>
                     setGeneratorConfig({
@@ -2317,7 +2356,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                   </label>
                   <input
                     type="date"
-                    className="w-full px-3 py-2 border rounded-lg text-sm"
+                    className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-amber-500"
                     value={generatorConfig.dateStart}
                     onChange={(e) =>
                       setGeneratorConfig({
@@ -2333,7 +2372,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                   </label>
                   <input
                     type="date"
-                    className="w-full px-3 py-2 border rounded-lg text-sm"
+                    className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-amber-500"
                     value={generatorConfig.dateEnd}
                     onChange={(e) =>
                       setGeneratorConfig({
@@ -2350,7 +2389,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                   Tipos de acciones a generar
                 </label>
                 <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-50 p-1 rounded">
                     <input
                       type="checkbox"
                       checked={generatorConfig.includeVentas}
@@ -2360,11 +2399,11 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                           includeVentas: e.target.checked,
                         })
                       }
-                      className="rounded"
+                      className="rounded text-amber-500 focus:ring-amber-500"
                     />
                     <span>Ventas y Anulaciones</span>
                   </label>
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-50 p-1 rounded">
                     <input
                       type="checkbox"
                       checked={generatorConfig.includeCaja}
@@ -2374,11 +2413,11 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                           includeCaja: e.target.checked,
                         })
                       }
-                      className="rounded"
+                      className="rounded text-amber-500 focus:ring-amber-500"
                     />
                     <span>Apertura/Cierre de Caja</span>
                   </label>
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-50 p-1 rounded">
                     <input
                       type="checkbox"
                       checked={generatorConfig.includeProductos}
@@ -2388,11 +2427,11 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                           includeProductos: e.target.checked,
                         })
                       }
-                      className="rounded"
+                      className="rounded text-amber-500 focus:ring-amber-500"
                     />
                     <span>Edición/Alta de Productos</span>
                   </label>
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-50 p-1 rounded">
                     <input
                       type="checkbox"
                       checked={generatorConfig.includeCategorias}
@@ -2402,30 +2441,31 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                           includeCategorias: e.target.checked,
                         })
                       }
-                      className="rounded"
+                      className="rounded text-amber-500 focus:ring-amber-500"
                     />
                     <span>Categorías</span>
                   </label>
                 </div>
               </div>
 
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-700">
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-700 flex gap-2">
+                <span className="text-xl">⚡</span>
                 <p>
-                  ⚡ Se generarán acciones variadas aleatorias basadas en los
+                  Se generarán acciones variadas aleatorias basadas en los
                   tipos seleccionados.
                 </p>
               </div>
             </div>
-            <div className="p-4 border-t flex gap-2 justify-end">
+            <div className="p-4 border-t flex gap-2 justify-end bg-slate-50 rounded-b-xl">
               <button
                 onClick={() => setShowGeneratorModal(false)}
-                className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition"
+                className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-200 rounded-lg transition"
               >
                 Cancelar
               </button>
               <button
                 onClick={generateRandomActions}
-                className="px-4 py-2 text-sm bg-amber-500 text-white rounded-lg font-bold hover:bg-amber-600 transition"
+                className="px-4 py-2 text-sm bg-amber-500 text-white rounded-lg font-bold hover:bg-amber-600 transition shadow-sm"
               >
                 Generar {generatorConfig.count} Acciones
               </button>
