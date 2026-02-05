@@ -59,19 +59,19 @@ export const useClients = () => {
     return true;
   };
 
-  // Buscar socio (Helper para lógica interna o POS rápido)
-  // Busca coincidencia exacta o parcial en varios campos
-  const searchMember = (query) => {
-    if (!query) return null;
-    const q = query.toLowerCase().trim();
-    
-    return members.find(m => 
-      String(m.memberNumber) === q ||
-      (m.dni && m.dni.includes(q)) ||
-      (m.phone && m.phone.includes(q)) ||
-      (m.email && m.email.toLowerCase().includes(q))
-    );
-  };
+    // Buscar socio (Helper para lógica interna o POS rápido)
+    // Busca coincidencia parcial en ID, DNI, teléfono o email
+    const searchMember = (query) => {
+        if (!query) return null;
+        const q = query.toLowerCase().trim();
+        
+        return members.find(m => 
+        String(m.memberNumber).includes(q) || // Cambio: includes para búsqueda parcial por ID
+        (m.dni && m.dni.includes(q)) ||
+        (m.phone && m.phone.includes(q)) ||
+        (m.email && m.email.toLowerCase().includes(q))
+        );
+    };
 
   // Sumar puntos tras una venta
   const addPoints = (memberId, totalSaleAmount, orderId) => {

@@ -15,8 +15,10 @@ import {
   LayoutGrid,
   List,
   ScanBarcode,
-  User, // Nuevo
-  Gift  // Nuevo
+  User, 
+  Gift,
+  UserMinus, // Icono para eliminar socio
+  AlertCircle // Icono para el modal de aviso
 } from 'lucide-react';
 import { PAYMENT_METHODS } from '../data';
 
@@ -42,17 +44,18 @@ export default function POSView({
   setPosViewMode,
   gridColumns,
   setGridColumns,
-  // --- PROPS FIDELIZACIÓN (NUEVOS) ---
+  // --- PROPS FIDELIZACIÓN ---
   selectedClient,
+  setSelectedClient, // Necesario para eliminar el socio
   onOpenClientModal
 }) {
   const [showGridMenu, setShowGridMenu] = useState(false);
+  const [showClientCheckModal, setShowClientCheckModal] = useState(false); // Estado para el check de socio
 
   // =====================================================
   // HELPER DE FORMATO (SIN DECIMALES, REDONDEO ARRIBA)
   // =====================================================
   const formatPrice = (amount) => {
-    // Redondeo hacia arriba (Math.ceil) y formato es-AR (punto de miles)
     return Math.ceil(Number(amount) || 0).toLocaleString('es-AR');
   };
 
@@ -63,6 +66,29 @@ export default function POSView({
     const itemInCart = cart.find(item => item.id === productId);
     const qtyInCart = itemInCart ? itemInCart.quantity : 0;
     return originalStock - qtyInCart;
+  };
+
+  // =====================================================
+  // LÓGICA DE COBRO CON VERIFICACIÓN DE SOCIO
+  // =====================================================
+  const handlePreCheckout = () => {
+    // Si hay items pero NO hay socio seleccionado, mostramos alerta
+    if (cart.length > 0 && !selectedClient) {
+      setShowClientCheckModal(true);
+    } else {
+      // Si ya hay socio o carrito vacío (aunque el botón se deshabilita), procedemos
+      handleCheckout();
+    }
+  };
+
+  const confirmCheckoutWithoutClient = () => {
+    setShowClientCheckModal(false);
+    handleCheckout();
+  };
+
+  const handleOpenClientModalFromCheck = () => {
+    setShowClientCheckModal(false);
+    onOpenClientModal();
   };
 
   // Filtrado
@@ -87,7 +113,7 @@ export default function POSView({
   const pointsToEarn = Math.floor(total / 100);
 
   return (
-    <div className="flex h-full overflow-hidden bg-slate-100">
+    <div className="flex h-full overflow-hidden bg-slate-100 relative">
       
       {/* ========================================== */}
       {/* COLUMNA IZQUIERDA: CATÁLOGO DE PRODUCTOS   */}
@@ -412,26 +438,39 @@ export default function POSView({
         {/* Footer Totales y Pago */}
         <div className="p-5 bg-slate-50 border-t space-y-4">
           
-          {/* --- SECCIÓN CLIENTE (NUEVO) --- */}
-          <div className="bg-white border border-blue-100 rounded-xl p-3 shadow-sm">
+          {/* --- SECCIÓN CLIENTE (MODIFICADO) --- */}
+          <div className={`bg-white border rounded-xl p-3 shadow-sm transition-colors ${selectedClient ? 'border-blue-200 bg-blue-50/30' : 'border-slate-200'}`}>
             <div className="flex justify-between items-center mb-2">
               <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1">
-                <User size={12} /> Cliente
+                <User size={12} /> Socio
               </span>
               {selectedClient && (
-                <button 
-                  onClick={() => onOpenClientModal()}
-                  className="text-[10px] text-blue-600 font-bold hover:underline"
-                >
-                  Cambiar
-                </button>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => onOpenClientModal()}
+                    className="text-[10px] text-blue-600 font-bold hover:underline"
+                  >
+                    Cambiar
+                  </button>
+                  {/* Botón para eliminar socio */}
+                  <button 
+                    onClick={() => setSelectedClient && setSelectedClient(null)}
+                    className="text-[10px] text-red-500 font-bold hover:bg-red-50 rounded px-1 flex items-center gap-1 transition-colors"
+                    title="Desvincular Socio"
+                  >
+                     <UserMinus size={10} /> Quitar
+                  </button>
+                </div>
               )}
             </div>
 
             {selectedClient ? (
               <div>
                 <div className="flex justify-between items-center">
-                   <span className="font-bold text-slate-800 text-sm">{selectedClient.name}</span>
+                   {/* Nombre y N° de Socio */}
+                   <span className="font-bold text-slate-800 text-sm">
+                     #{selectedClient.memberNumber} - {selectedClient.name}
+                   </span>
                    <span className="bg-blue-100 text-blue-700 text-[10px] px-1.5 py-0.5 rounded font-bold">{selectedClient.points} pts</span>
                 </div>
                 {/* Puntos a ganar */}
@@ -445,7 +484,7 @@ export default function POSView({
                 onClick={onOpenClientModal}
                 className="w-full py-2 border-2 border-dashed border-slate-300 rounded-lg text-slate-400 text-xs font-bold hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50 transition-all flex items-center justify-center gap-2"
               >
-                <User size={14} /> Asignar Cliente / Puntos
+                <User size={14} /> Asignar Socio / Puntos
               </button>
             )}
           </div>
@@ -499,7 +538,6 @@ export default function POSView({
             {selectedPayment === 'Credito' && (
               <div className="flex justify-between text-xs text-amber-600 font-bold">
                 <span>Recargo (10%)</span>
-                {/* Calculamos el recargo redondeando hacia arriba para mostrar */}
                 <span>+${formatPrice(subtotal * 0.1)}</span>
               </div>
             )}
@@ -509,9 +547,9 @@ export default function POSView({
             </div>
           </div>
 
-          {/* Botón Cobrar */}
+          {/* Botón Cobrar (Interceptado) */}
           <button
-            onClick={handleCheckout}
+            onClick={handlePreCheckout}
             disabled={cart.length === 0}
             className="w-full py-4 bg-gradient-to-r from-slate-900 to-slate-800 hover:from-black hover:to-slate-900 text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 group"
           >
@@ -520,6 +558,44 @@ export default function POSView({
           </button>
         </div>
       </div>
+
+      {/* ===================================================== */}
+      {/* MODAL CHECK SOCIO (IMAGEN 3) - Interceptor de Cobro   */}
+      {/* ===================================================== */}
+      {showClientCheckModal && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center transform scale-100 transition-all border border-slate-200">
+            
+            <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
+              <User size={32} strokeWidth={2.5} />
+            </div>
+
+            <h3 className="text-xl font-bold text-slate-800 mb-2">¿Asignar Socio?</h3>
+            <p className="text-slate-500 text-sm mb-6">
+              Esta venta no tiene un socio asignado. ¿Deseas sumar puntos a un cliente?
+            </p>
+
+            <div className="space-y-3">
+              <button
+                onClick={handleOpenClientModalFromCheck}
+                className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-colors shadow-md shadow-blue-200"
+              >
+                <User size={18} />
+                Sí, buscar socio
+              </button>
+              
+              <button
+                onClick={confirmCheckoutWithoutClient}
+                className="w-full py-3 bg-white border-2 border-slate-200 text-slate-500 hover:text-slate-700 hover:bg-slate-50 rounded-xl font-bold transition-colors"
+              >
+                No, continuar compra
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

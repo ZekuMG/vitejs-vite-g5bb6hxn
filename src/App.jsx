@@ -90,8 +90,8 @@ export default function PartySupplyApp() {
     getInitialState('party_closingTime', '21:00')
   );
 
-  // --- HOOK DE SOCIOS ---
-  const { members, addMember, addPoints } = useClients();
+  // --- HOOK DE SOCIOS (Modificado: Extraemos update y delete) ---
+  const { members, addMember, updateMember, deleteMember, addPoints } = useClients();
 
   // ==========================================
   // 2. ESTADOS DE SESIÓN Y UI
@@ -451,6 +451,19 @@ export default function PartySupplyApp() {
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  // Helper Centralizado para abrir modal de Edición/Ver Detalles de Transacción
+  const handleEditTransactionRequest = (tx) => {
+    const safeTx = JSON.parse(JSON.stringify(tx));
+    safeTx.items = safeTx.items.map((i) => ({
+      ...i,
+      qty: Number(i.qty) || 0,
+      price: Number(i.price) || 0,
+    }));
+    setEditingTransaction(safeTx);
+    setTransactionSearch('');
+    setEditReason('');
   };
 
   const handleViewTicket = (tx) => {
@@ -1050,9 +1063,22 @@ export default function PartySupplyApp() {
         <main className="flex-1 overflow-y-auto p-4 bg-slate-100">
           {activeTab === 'dashboard' && (<DashboardView openingBalance={openingBalance} totalSales={totalSales} salesCount={salesCount} currentUser={currentUser} setTempOpeningBalance={setTempOpeningBalance} setIsOpeningBalanceModalOpen={setIsOpeningBalanceModalOpen} transactions={validTransactions} dailyLogs={dailyLogs} inventory={inventory} />)}
           {activeTab === 'inventory' && (<InventoryView inventory={inventory} categories={categories} currentUser={currentUser} inventoryViewMode={inventoryViewMode} setInventoryViewMode={setInventoryViewMode} gridColumns={inventoryGridColumns} setGridColumns={setInventoryGridColumns} inventorySearch={inventorySearch} setInventorySearch={setInventorySearch} inventoryCategoryFilter={inventoryCategoryFilter} setInventoryCategoryFilter={setInventoryCategoryFilter} setIsModalOpen={setIsModalOpen} setEditingProduct={(prod) => { setEditingProduct(prod); setEditReason(''); }} handleDeleteProduct={handleDeleteProductRequest} setSelectedImage={setSelectedImage} setIsImageModalOpen={setIsImageModalOpen} />)}
-          {activeTab === 'pos' && (isRegisterClosed ? (<div className="h-full flex flex-col items-center justify-center text-slate-400"><Lock size={64} className="mb-4 text-slate-300" /><h3 className="text-xl font-bold text-slate-600">Caja Cerrada</h3>{currentUser.role === 'admin' ? (<><p className="mb-6">Debes abrir la caja para realizar ventas.</p><button onClick={toggleRegisterStatus} className="bg-green-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-green-700">Abrir Caja</button></>) : (<p className="mb-6 text-center">El Dueño debe abrir la caja para realizar ventas.</p>)}</div>) : (<POSView inventory={inventory} categories={categories} addToCart={addToCart} cart={cart} removeFromCart={removeFromCart} updateCartItemQty={updateCartItemQty} selectedPayment={selectedPayment} setSelectedPayment={setSelectedPayment} installments={installments} setInstallments={setInstallments} calculateTotal={calculateTotal} handleCheckout={handleCheckout} posSearch={posSearch} setPosSearch={setPosSearch} selectedCategory={posSelectedCategory} setSelectedCategory={setPosSelectedCategory} posViewMode={posViewMode} setPosViewMode={setPosViewMode} gridColumns={posGridColumns} setGridColumns={setPosGridColumns} selectedClient={posSelectedClient} onOpenClientModal={() => setIsClientModalOpen(true)} />))}
-          {activeTab === 'clients' && (<ClientsView onViewTicket={handleViewTicket} />)}
-          {activeTab === 'history' && (<HistoryView transactions={transactions} dailyLogs={dailyLogs} inventory={inventory} currentUser={currentUser} showNotification={showNotification} onViewTicket={handleViewTicket} onDeleteTransaction={handleDeleteTransaction} onEditTransaction={(tx) => { const safeTx = JSON.parse(JSON.stringify(tx)); safeTx.items = safeTx.items.map((i) => ({ ...i, qty: Number(i.qty) || 0, price: Number(i.price) || 0, })); setEditingTransaction(safeTx); setTransactionSearch(''); setEditReason(''); }} setTransactions={setTransactions} setDailyLogs={setDailyLogs} />)}
+          {activeTab === 'pos' && (isRegisterClosed ? (<div className="h-full flex flex-col items-center justify-center text-slate-400"><Lock size={64} className="mb-4 text-slate-300" /><h3 className="text-xl font-bold text-slate-600">Caja Cerrada</h3>{currentUser.role === 'admin' ? (<><p className="mb-6">Debes abrir la caja para realizar ventas.</p><button onClick={toggleRegisterStatus} className="bg-green-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-green-700">Abrir Caja</button></>) : (<p className="mb-6 text-center">El Dueño debe abrir la caja para realizar ventas.</p>)}</div>) : (<POSView inventory={inventory} categories={categories} addToCart={addToCart} cart={cart} removeFromCart={removeFromCart} updateCartItemQty={updateCartItemQty} selectedPayment={selectedPayment} setSelectedPayment={setSelectedPayment} installments={installments} setInstallments={setInstallments} calculateTotal={calculateTotal} handleCheckout={handleCheckout} posSearch={posSearch} setPosSearch={setPosSearch} selectedCategory={posSelectedCategory} setSelectedCategory={setPosSelectedCategory} posViewMode={posViewMode} setPosViewMode={setPosViewMode} gridColumns={posGridColumns} setGridColumns={setPosGridColumns} selectedClient={posSelectedClient} setSelectedClient={setPosSelectedClient} onOpenClientModal={() => setIsClientModalOpen(true)} />))}
+          
+          {/* CLIENTES (SOCIOS) - Ahora recibe props para sincronización y vista de transacciones */}
+          {activeTab === 'clients' && (
+            <ClientsView 
+              members={members} 
+              updateMember={updateMember}
+              deleteMember={deleteMember}
+              onViewTransaction={handleEditTransactionRequest}
+              transactions={transactions}
+            />
+          )}
+
+          {/* HISTORIAL - Ahora usa el helper handleEditTransactionRequest */}
+          {activeTab === 'history' && (<HistoryView transactions={transactions} dailyLogs={dailyLogs} inventory={inventory} currentUser={currentUser} showNotification={showNotification} onViewTicket={handleViewTicket} onDeleteTransaction={handleDeleteTransaction} onEditTransaction={handleEditTransactionRequest} setTransactions={setTransactions} setDailyLogs={setDailyLogs} />)}
+          
           {activeTab === 'logs' && currentUser.role === 'admin' && (<LogsView dailyLogs={dailyLogs} setDailyLogs={setDailyLogs} inventory={inventory} />)}
           {activeTab === 'categories' && currentUser.role === 'admin' && (<CategoryManagerView categories={categories} inventory={inventory} onAddCategory={handleAddCategoryFromView} onDeleteCategory={handleDeleteCategoryFromView} onEditCategory={(oldName, newName) => { if (newName && newName !== oldName && !categories.includes(newName)) { setCategories(categories.map((c) => (c === oldName ? newName : c))); setInventory(inventory.map((p) => { let updatedCats = p.categories ? [...p.categories] : p.category ? [p.category] : []; if (updatedCats.includes(oldName)) { updatedCats = updatedCats.map((c) => c === oldName ? newName : c); } const updatedCat = p.category === oldName ? newName : p.category; return { ...p, category: updatedCat, categories: updatedCats, }; })); addLog('Categoría', { name: newName, type: 'edit', oldName: oldName, }); showNotification('success', 'Categoría Editada', 'Nombre actualizado correctamente.'); } }} onBatchUpdateProductCategory={(changes) => { if (!changes || changes.length === 0) return; let updatedInventory = [...inventory]; const logDetails = []; changes.forEach(({ productId, categoryName, action }) => { updatedInventory = updatedInventory.map((p) => { if (p.id === productId) { const currentCats = Array.isArray(p.categories) ? [...p.categories] : p.category ? [p.category] : []; let newCats = [...currentCats]; if (action === 'add') { if (!newCats.includes(categoryName)) newCats.push(categoryName); } else if (action === 'remove') { newCats = newCats.filter((c) => c !== categoryName); } return { ...p, categories: newCats, category: newCats.length > 0 ? newCats[0] : '', }; } return p; }); logDetails.push(`${action === 'add' ? 'Agregado a' : 'Quitado de'} ${categoryName} (Prod: ${productId})`); }); setInventory(updatedInventory); addLog('Edición Masiva Categorías', { count: changes.length, details: logDetails, }); showNotification('success', 'Edición Masiva', `Se actualizaron ${changes.length} productos.`); }} onUpdateProductCategory={() => {}} />)}
         </main>

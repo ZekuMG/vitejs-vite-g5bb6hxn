@@ -250,7 +250,7 @@ export const BarcodeDuplicateModal = ({ isOpen, existingProduct, onClose, onKeep
 };
 
 // ==========================================
-// MODAL: SELECCIÓN DE SOCIO (REORGANIZADO)
+// MODAL: SELECCIÓN DE SOCIO (MODIFICADO)
 // ==========================================
 
 export const ClientSelectionModal = ({ isOpen, onClose, onSelectClient, clients = [], addClient, onCancelFlow }) => {
@@ -270,19 +270,20 @@ export const ClientSelectionModal = ({ isOpen, onClose, onSelectClient, clients 
     }
   }, [isOpen]);
 
-  // Lógica de búsqueda filtrada
-  const filteredMembers = searchTerm 
+  // Lógica de visualización de miembros:
+  // Si hay búsqueda, filtra. Si NO hay búsqueda, muestra los primeros 5 (lista por defecto).
+  const displayedMembers = searchTerm 
     ? clients.filter(m => {
         const term = searchTerm.toLowerCase();
         return (
           m.name.toLowerCase().includes(term) ||
-          String(m.memberNumber).includes(term) ||
+          String(m.memberNumber).includes(term) || // Búsqueda por N° Socio
           (m.dni && m.dni.includes(term)) ||
           (m.phone && m.phone.includes(term)) ||
           (m.email && m.email.toLowerCase().includes(term))
         );
-      }).slice(0, 5) // Limitar a 5 resultados para UI limpia
-    : [];
+      }).slice(0, 5) // Limitar a 5 resultados
+    : clients.slice(0, 5); // Mostrar los primeros 5 si no hay búsqueda
 
   const handleCreate = (e) => {
     e.preventDefault();
@@ -357,12 +358,12 @@ export const ClientSelectionModal = ({ isOpen, onClose, onSelectClient, clients 
 
               {/* Lista de Resultados */}
               <div className="space-y-2 mb-4 max-h-60 overflow-y-auto">
-                {searchTerm && filteredMembers.length === 0 ? (
+                {displayedMembers.length === 0 ? (
                   <div className="text-center py-4 text-slate-400 bg-slate-50 rounded-lg border border-dashed">
-                    No se encontraron socios.
+                    {searchTerm ? 'No se encontraron socios.' : 'No hay socios registrados.'}
                   </div>
                 ) : (
-                  filteredMembers.map(member => (
+                  displayedMembers.map(member => (
                     <button
                       key={member.id}
                       onClick={() => {
