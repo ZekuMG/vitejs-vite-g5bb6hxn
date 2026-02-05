@@ -26,6 +26,10 @@ import {
   FilterX,
   Wand2,
   CheckCircle,
+  UserPlus,
+  UserMinus,
+  UserCog,
+  Trophy
 } from 'lucide-react';
 // ♻️ REFACTOR: Importar formatPrice desde helpers.js
 import { formatPrice } from '../utils/helpers';
@@ -55,8 +59,6 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
 
   const safeLogs = Array.isArray(dailyLogs) ? dailyLogs : [];
 
-  // ♻️ REFACTOR: formatPrice eliminado - ahora importado desde helpers.js
-
   // =====================================================
   // NORMALIZACIÓN DE ACCIONES
   // =====================================================
@@ -70,19 +72,31 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
   };
 
   // =====================================================
-  // DETECCIÓN DE TIPO POR ESTRUCTURA DE DATOS (CORREGIDO)
+  // DETECCIÓN DE TIPO POR ESTRUCTURA DE DATOS
   // =====================================================
   const detectActionType = (log) => {
     const action = normalizeAction(log.action);
     const details = log.details;
 
-    // 0. Si la acción ya viene bien definida, la respetamos.
-    if (['Venta Realizada', 'Modificación Pedido', 'Venta Anulada', 'Edición Producto'].includes(action)) {
+    // 0. Acciones explícitas
+    const explicitActions = [
+      'Venta Realizada', 
+      'Modificación Pedido', 
+      'Venta Anulada', 
+      'Edición Producto',
+      'Nuevo Socio',
+      'Edición de Puntos',
+      'Edición de Socio',
+      'Baja de Socio'
+    ];
+
+    if (explicitActions.includes(action)) {
         return action;
     }
 
     if (!details || typeof details === 'string') return action;
 
+    // ... (Lógica de detección automática existente) ...
     // 1. EDICIÓN PRODUCTO
     if (
       (typeof details.product === 'string' || details.title || details.name) &&
@@ -94,7 +108,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
       return 'Edición Producto';
     }
 
-    // 2. VENTA REALIZADA (Corrección: No exigir 'payment' estrictamente)
+    // 2. VENTA REALIZADA
     if (
       details.items &&
       details.total !== undefined &&
@@ -322,7 +336,7 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
   };
 
   // =====================================================
-  // RESUMEN
+  // RESUMEN (getSummary)
   // =====================================================
   const getSummary = (log) => {
     const action = log.action;
@@ -335,6 +349,64 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
       return <span className="text-slate-600 text-[10px]">{details}</span>;
 
     switch (action) {
+      // --- ACCIONES DE SOCIOS ---
+      case 'Nuevo Socio':
+        return (
+           <div className="flex items-center gap-2 flex-wrap">
+             <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1">
+               <UserPlus size={10} /> Nuevo
+             </span>
+             <span className="text-slate-700 font-bold text-[10px]">
+               {details.name}
+             </span>
+             <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-[10px] font-mono">
+               #{String(details.number).padStart(4, '0')}
+             </span>
+           </div>
+        );
+
+      // CASO UNIFICADO: Edición de Socio o Puntos
+      case 'Edición de Puntos':
+      case 'Edición de Socio':
+        return (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1">
+               <UserCog size={10} /> Edición
+            </span>
+            <span className="text-slate-700 text-[10px] font-bold">
+               {details.member}
+            </span>
+            {/* Si es puntos, mostramos badge de diferencia */}
+            {action === 'Edición de Puntos' && (
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${details.diff > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                {details.diff > 0 ? '+' : ''}{details.diff} pts
+                </span>
+            )}
+            {/* Si es datos, mostramos cantidad de campos */}
+            {action === 'Edición de Socio' && (
+                <span className="text-slate-400 text-[10px]">
+                ({(details.updates || []).length} cambios)
+                </span>
+            )}
+          </div>
+        );
+
+      case 'Baja de Socio':
+         return (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1">
+               <UserMinus size={10} /> Baja
+            </span>
+            <span className="text-slate-700 text-[10px] line-through">
+               {details.name}
+            </span>
+            <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-[10px] font-mono">
+               #{String(details.number).padStart(4, '0')}
+             </span>
+          </div>
+         );
+
+      // --- OTROS CASOS ---
       case 'Venta Realizada': {
         const txId = getTransactionId(details);
         const items = details.items || [];
@@ -436,15 +508,10 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
         const changes = details.changes || {};
         const productName = details.product || details.title || details.name || 'Producto';
         const productId = details.id || details.productId;
-
-        // Generar badges para cada tipo de cambio
         const changeBadges = [];
         if (changes.price) {
           changeBadges.push(
-            <span
-              key="price"
-              className="bg-green-100 text-green-700 px-1.5 py-0.5 rounded text-[10px]"
-            >
+            <span key="price" className="bg-green-100 text-green-700 px-1.5 py-0.5 rounded text-[10px]">
               ${formatPrice(changes.price.old)} → ${formatPrice(changes.price.new)}
             </span>
           );
@@ -452,35 +519,21 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
         if (changes.stock) {
           const diff = changes.stock.new - changes.stock.old;
           changeBadges.push(
-            <span
-              key="stock"
-              className={`px-1.5 py-0.5 rounded text-[10px] ${
-                diff > 0
-                  ? 'bg-blue-100 text-blue-700'
-                  : 'bg-amber-100 text-amber-700'
-              }`}
-            >
-              Stock: {diff > 0 ? '+' : ''}
-              {diff}
+            <span key="stock" className={`px-1.5 py-0.5 rounded text-[10px] ${diff > 0 ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
+              Stock: {diff > 0 ? '+' : ''}{diff}
             </span>
           );
         }
         if (changes.purchasePrice) {
           changeBadges.push(
-            <span
-              key="cost"
-              className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[10px]"
-            >
+            <span key="cost" className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[10px]">
               Costo: ${formatPrice(changes.purchasePrice.old)} → ${formatPrice(changes.purchasePrice.new)}
             </span>
           );
         }
         if (changes.category) {
           changeBadges.push(
-            <span
-              key="cat"
-              className="bg-fuchsia-100 text-fuchsia-700 px-1.5 py-0.5 rounded text-[10px]"
-            >
+            <span key="cat" className="bg-fuchsia-100 text-fuchsia-700 px-1.5 py-0.5 rounded text-[10px]">
               {changes.category.old} → {changes.category.new}
             </span>
           );
@@ -747,6 +800,126 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
     }
 
     switch (action) {
+      // --- DETALLES DE SOCIOS ---
+      case 'Nuevo Socio':
+        return (
+          <div className="space-y-3">
+            <div className="bg-green-50 p-4 rounded-lg border border-green-200 flex items-center gap-4">
+               <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center text-white">
+                  <UserPlus size={24} />
+               </div>
+               <div>
+                  <p className="text-[10px] font-bold text-green-600 uppercase">Alta de Cliente</p>
+                  <p className="text-lg font-bold text-slate-800">{details.name}</p>
+               </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-slate-50 p-3 rounded border">
+                <p className="text-[10px] text-slate-400 uppercase font-bold">N° Socio</p>
+                <p className="font-mono font-bold text-slate-700">#{String(details.number).padStart(4,'0')}</p>
+              </div>
+              <div className="bg-slate-50 p-3 rounded border">
+                <p className="text-[10px] text-slate-400 uppercase font-bold">Puntos Iniciales</p>
+                <p className="font-mono font-bold text-slate-700">{details.initialPoints || 0} pts</p>
+              </div>
+            </div>
+          </div>
+        );
+
+      // CASO UNIFICADO: Edición de Socio o Puntos
+      case 'Edición de Puntos':
+      case 'Edición de Socio':
+        const isPoints = action === 'Edición de Puntos';
+        return (
+          <div className="space-y-3">
+            <div className={`p-4 rounded-lg border flex items-center gap-4 ${isPoints ? 'bg-purple-50 border-purple-200' : 'bg-blue-50 border-blue-200'}`}>
+               <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white ${isPoints ? 'bg-purple-500' : 'bg-blue-500'}`}>
+                  {isPoints ? <Trophy size={24} /> : <UserCog size={24} />}
+               </div>
+               <div>
+                  <p className={`text-[10px] font-bold uppercase ${isPoints ? 'text-purple-600' : 'text-blue-600'}`}>
+                    {isPoints ? 'Ajuste de Saldo' : 'Actualización de Datos'}
+                  </p>
+                  <p className="text-lg font-bold text-slate-800">{details.member}</p>
+               </div>
+            </div>
+
+            {/* Sub-bloque Puntos (Antes vs Después) */}
+            {isPoints && (
+                <>
+                <div className="flex items-center justify-between bg-slate-50 p-4 rounded-lg border">
+                    <div className="text-center">
+                    <p className="text-[10px] text-slate-400 uppercase font-bold mb-1">Anterior</p>
+                    <p className="text-xl font-mono text-slate-500">{details.previous} pts</p>
+                    </div>
+                    <ArrowRight className="text-slate-300" />
+                    <div className="text-center">
+                    <p className="text-[10px] text-slate-400 uppercase font-bold mb-1">Nuevo</p>
+                    <p className="text-xl font-mono text-slate-800 font-bold">{details.new} pts</p>
+                    </div>
+                </div>
+                <div className={`p-3 rounded-lg text-center font-bold text-sm ${details.diff > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                    Diferencia: {details.diff > 0 ? '+' : ''}{details.diff} puntos
+                </div>
+                </>
+            )}
+
+            {/* Sub-bloque Datos (Lista de Cambios - Antes vs Después si está disponible) */}
+            {!isPoints && (
+                <div className="border rounded-lg overflow-hidden">
+                <div className="bg-slate-100 px-3 py-2 border-b">
+                    <p className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1">
+                    <List size={14}/> Campos Modificados
+                    </p>
+                </div>
+                {/* Si en App.jsx pasaste 'updates' como array simple de strings (["name", "email"]), se muestra lista simple.
+                   Si pasaste objeto detallado con 'old' y 'new', podríamos mostrar tabla comparativa.
+                   Aquí asumo que 'details.updates' es un array de strings (como lo dejé en el paso anterior).
+                */}
+                <ul className="divide-y max-h-60 overflow-y-auto bg-white">
+                    {(details.updates || []).map((field, idx) => (
+                    <li key={idx} className="px-3 py-2 text-xs flex items-center gap-2">
+                        <CheckCircle size={14} className="text-blue-500" />
+                        <span className="text-slate-700">Se modificó: <span className="font-bold capitalize">{field}</span></span>
+                    </li>
+                    ))}
+                    {(details.updates || []).length === 0 && (
+                    <li className="px-3 py-4 text-center text-xs text-slate-400 italic">
+                        No se registraron cambios específicos
+                    </li>
+                    )}
+                </ul>
+                <div className="bg-slate-50 p-2 text-[10px] text-center text-slate-400 border-t">
+                    * Para ver el valor anterior y nuevo, revisa el historial individual del socio.
+                </div>
+                </div>
+            )}
+          </div>
+        );
+
+      case 'Baja de Socio':
+        return (
+          <div className="space-y-3">
+             <div className="bg-red-50 p-4 rounded-lg border border-red-200 flex items-center gap-4">
+               <div className="w-12 h-12 bg-red-500 rounded-full flex items-center justify-center text-white">
+                  <UserMinus size={24} />
+               </div>
+               <div>
+                  <p className="text-[10px] font-bold text-red-600 uppercase">Socio Eliminado</p>
+                  <p className="text-lg font-bold text-slate-800">{details.name}</p>
+               </div>
+            </div>
+            <div className="bg-slate-50 p-3 rounded border text-center">
+                <p className="text-[10px] text-slate-400 uppercase font-bold">N° Socio</p>
+                <p className="font-mono font-bold text-slate-700 text-lg">#{String(details.number).padStart(4,'0')}</p>
+            </div>
+            <p className="text-xs text-red-500 text-center italic">
+              Esta acción fue permanente y se borró el historial de puntos.
+            </p>
+          </div>
+        );
+
+      // --- ACCIONES EXISTENTES ---
       case 'Venta Realizada': {
         const txId = getTransactionId(details);
         const items = details.items || [];
@@ -1589,6 +1762,11 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
       'Sistema Iniciado': 'Información del Sistema',
       'Borrado Permanente': 'Registro Eliminado',
       'Edición Masiva Categorías': 'Reporte de Cambios Masivos',
+      // NUEVOS TÍTULOS
+      'Nuevo Socio': 'Información del Nuevo Socio',
+      'Edición de Puntos': 'Detalle de Ajuste de Saldo',
+      'Edición de Socio': 'Resumen de Cambios',
+      'Baja de Socio': 'Información del Socio Eliminado'
     };
     return titles[action] || 'Detalles';
   };
@@ -2250,50 +2428,6 @@ export default function LogsView({ dailyLogs, setDailyLogs, inventory }) {
                 className="px-4 py-2 text-sm bg-amber-500 text-white rounded-lg font-bold hover:bg-amber-600 transition"
               >
                 Generar {generatorConfig.count} Acciones
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Eliminar */}
-      {showDeleteModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full">
-            <div className="p-4 border-b flex justify-between items-center bg-red-500">
-              <h4 className="font-bold text-white flex items-center gap-2">
-                <AlertTriangle size={18} /> Eliminar Registro
-              </h4>
-              <button
-                onClick={() => setShowDeleteModal(false)}
-                className="text-white/80 hover:text-white"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            <div className="p-4">
-              <p className="text-sm text-slate-600 mb-4">
-                Esta acción eliminará{' '}
-                <strong>todos los registros de acciones</strong>. No se puede
-                deshacer.
-              </p>
-              <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-700">
-                <p className="font-bold">Se eliminarán:</p>
-                <p>• {safeLogs.length} registros de acciones</p>
-              </div>
-            </div>
-            <div className="p-4 border-t flex gap-2 justify-end">
-              <button
-                onClick={() => setShowDeleteModal(false)}
-                className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={clearAllLogs}
-                className="px-4 py-2 text-sm bg-red-500 text-white rounded-lg font-bold hover:bg-red-600 transition"
-              >
-                Eliminar Todo
               </button>
             </div>
           </div>

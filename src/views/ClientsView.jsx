@@ -13,7 +13,8 @@ import {
   Mail,
   FileText,
   AlertTriangle,
-  Trophy
+  Trophy,
+  XCircle
 } from 'lucide-react';
 
 export default function ClientsView({ 
@@ -21,24 +22,29 @@ export default function ClientsView({
   addMember, 
   updateMember, 
   deleteMember, 
-  onViewTransaction, 
+  currentUser,
+  onViewTicket,
+  onEditTransaction,
+  onDeleteTransaction,
   transactions = [] 
 }) {
   
   // Estados de Interfaz
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedMember, setSelectedMember] = useState(null); // Para ver historial/detalles
+  const [selectedMember, setSelectedMember] = useState(null);
+  const [selectedTx, setSelectedTx] = useState(null);
   
-  // Estados de Modal (Crear/Editar)
+  // Estados de Modal (Crear/Editar Socio)
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalMode, setModalMode] = useState('create'); // 'create' | 'edit'
+  const [modalMode, setModalMode] = useState('create');
   const [formData, setFormData] = useState({
     id: null,
     name: '',
     dni: '',
     phone: '',
     email: '',
-    extraInfo: ''
+    extraInfo: '',
+    points: 0 // Campo nuevo
   });
 
   // Estado de Eliminación
@@ -49,7 +55,6 @@ export default function ClientsView({
   const [isDrawerEditMode, setIsDrawerEditMode] = useState(false);
   const [drawerFormData, setDrawerFormData] = useState({});
 
-  // Resetear edición al cambiar de socio seleccionado
   useEffect(() => {
     if (selectedMember) {
       setIsDrawerEditMode(false);
@@ -57,7 +62,7 @@ export default function ClientsView({
     }
   }, [selectedMember]);
 
-  // --- FILTRADO (Buscador Universal) ---
+  // --- FILTRADO ---
   const filteredMembers = members.filter((m) => {
     const term = searchTerm.toLowerCase();
     return (
@@ -70,10 +75,9 @@ export default function ClientsView({
   });
 
   // --- HANDLERS ---
-
   const openCreateModal = () => {
     setModalMode('create');
-    setFormData({ id: null, name: '', dni: '', phone: '', email: '', extraInfo: '' });
+    setFormData({ id: null, name: '', dni: '', phone: '', email: '', extraInfo: '', points: 0 });
     setIsModalOpen(true);
   };
 
@@ -85,7 +89,8 @@ export default function ClientsView({
       dni: member.dni || '',
       phone: member.phone || '',
       email: member.email || '',
-      extraInfo: member.extraInfo || ''
+      extraInfo: member.extraInfo || '',
+      points: member.points || 0
     });
     setIsModalOpen(true);
   };
@@ -96,6 +101,7 @@ export default function ClientsView({
       addMember(formData);
     } else {
       updateMember(formData.id, formData);
+      // Actualización optimista de la UI si estamos viendo el detalle
       if (selectedMember && selectedMember.id === formData.id) {
          setSelectedMember({ ...selectedMember, ...formData });
       }
@@ -103,7 +109,6 @@ export default function ClientsView({
     setIsModalOpen(false);
   };
 
-  // Handler para edición interna en el Drawer
   const handleDrawerEditSubmit = (e) => {
     e.preventDefault();
     updateMember(selectedMember.id, drawerFormData);
@@ -117,7 +122,8 @@ export default function ClientsView({
       dni: selectedMember.dni || '',
       phone: selectedMember.phone || '',
       email: selectedMember.email || '',
-      extraInfo: selectedMember.extraInfo || ''
+      extraInfo: selectedMember.extraInfo || '',
+      points: selectedMember.points || 0 // Incluimos puntos también en el drawer
     });
     setIsDrawerEditMode(true);
   };
@@ -140,13 +146,14 @@ export default function ClientsView({
 
   const handleViewOrderDetails = (orderId) => {
     const transaction = transactions.find(t => String(t.id) === String(orderId));
-    if (transaction && onViewTransaction) {
-      onViewTransaction(transaction);
+    if (transaction) {
+      setSelectedTx(transaction);
     } else {
       alert('La transacción no se encuentra en el historial activo.');
     }
   };
 
+  // --- FORMATTERS ---
   const formatMoney = (amount) => {
     return amount ? `$${Number(amount).toLocaleString('es-AR')}` : '-';
   };
@@ -342,6 +349,7 @@ export default function ClientsView({
                     <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">DNI</label><input className="w-full rounded-lg border p-2.5 outline-none focus:ring-2 focus:ring-blue-100" value={drawerFormData.dni} onChange={e => setDrawerFormData({...drawerFormData, dni: e.target.value})} /></div>
                     <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Teléfono</label><input className="w-full rounded-lg border p-2.5 outline-none focus:ring-2 focus:ring-blue-100" value={drawerFormData.phone} onChange={e => setDrawerFormData({...drawerFormData, phone: e.target.value})} /></div>
                   </div>
+                  <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Puntos (Ajuste Manual)</label><input type="number" className="w-full rounded-lg border p-2.5 outline-none focus:ring-2 focus:ring-blue-100 font-bold text-blue-600" value={drawerFormData.points} onChange={e => setDrawerFormData({...drawerFormData, points: e.target.value})} /></div>
                   <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Email</label><input className="w-full rounded-lg border p-2.5 outline-none focus:ring-2 focus:ring-blue-100" value={drawerFormData.email} onChange={e => setDrawerFormData({...drawerFormData, email: e.target.value})} /></div>
                   <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Notas</label><textarea rows="3" className="w-full rounded-lg border p-2.5 outline-none focus:ring-2 focus:ring-blue-100 resize-none" value={drawerFormData.extraInfo} onChange={e => setDrawerFormData({...drawerFormData, extraInfo: e.target.value})} /></div>
                   <div className="flex gap-3 pt-2">
@@ -377,13 +385,13 @@ export default function ClientsView({
                           <div className="flex justify-between items-start mb-3 border-b border-gray-50 pb-2">
                             <div>
                               <p className={`text-sm font-bold ${mov.type === 'earned' ? 'text-green-600' : 'text-orange-600'}`}>
-                                {mov.type === 'earned' ? 'Compra Realizada' : 'Canje de Puntos'}
+                                {mov.type === 'earned' ? (mov.concept || 'Compra Realizada') : (mov.concept || 'Canje de Puntos')}
                               </p>
                               <p className="text-xs text-gray-400 font-medium">
                                 {new Date(mov.date).toLocaleDateString()} • {formatTime24(mov.date)}
                               </p>
                             </div>
-                            {mov.orderId && (
+                            {mov.orderId && mov.orderId !== '---' && (
                               <div className="text-right">
                                 <span className="text-[10px] text-gray-400 uppercase font-bold">N° Pedido</span>
                                 <p className="text-xs font-mono font-bold text-gray-700">#{String(mov.orderId).padStart(6,'0')}</p>
@@ -392,11 +400,13 @@ export default function ClientsView({
                           </div>
                           <div className="flex items-center justify-between">
                             <div className="text-sm">
-                              {mov.totalSale > 0 && (
+                              {mov.totalSale > 0 ? (
                                 <div className="flex items-center gap-1.5 text-gray-600">
                                   <CreditCard size={14} className="text-gray-400" />
                                   <span>Monto: <span className="font-bold text-gray-900">{formatMoney(mov.totalSale)}</span></span>
                                 </div>
+                              ) : (
+                                <div className="text-xs italic text-gray-400">Ajuste Manual</div>
                               )}
                             </div>
                             <div className="flex items-center gap-2 text-xs bg-slate-50 px-2 py-1.5 rounded-lg border border-slate-100">
@@ -432,6 +442,118 @@ export default function ClientsView({
         </div>
       )}
 
+      {/* --- MODAL DETALLES TRANSACCIÓN --- */}
+      {selectedTx && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[80vh] overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="p-4 border-b bg-slate-50 flex justify-between items-center">
+              <h4 className="font-bold text-slate-800">
+                Venta #{String(selectedTx.id).padStart(6, '0')}
+              </h4>
+              <button
+                onClick={() => setSelectedTx(null)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-4 space-y-4 overflow-y-auto max-h-[60vh]">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p className="text-slate-400 text-xs">Fecha</p>
+                  <p className="font-bold">
+                    {selectedTx.date} {selectedTx.timestamp || selectedTx.time}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-slate-400 text-xs">Usuario</p>
+                  <p className="font-bold">{selectedTx.user}</p>
+                </div>
+                <div>
+                  <p className="text-slate-400 text-xs">Pago</p>
+                  <p className="font-bold">{selectedTx.payment}</p>
+                </div>
+                <div>
+                  <p className="text-slate-400 text-xs">Total</p>
+                  <p className="font-bold text-fuchsia-600">
+                    ${selectedTx.total?.toLocaleString()}
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-slate-400 text-xs mb-2">Productos</p>
+                <div className="space-y-2">
+                  {(selectedTx.items || []).map((item, idx) => (
+                    <div
+                      key={idx}
+                      className="flex justify-between items-center p-2 bg-slate-50 rounded"
+                    >
+                      <div>
+                        <p className="font-medium text-sm">{item.title}</p>
+                        <p className="text-xs text-slate-400">
+                          {item.qty || item.quantity} x $
+                          {item.price?.toLocaleString()}
+                        </p>
+                      </div>
+                      <p className="font-bold text-sm">
+                        $
+                        {(
+                          (item.qty || item.quantity) * item.price
+                        ).toLocaleString()}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Acciones Modal */}
+            <div className="p-4 border-t bg-slate-50 flex gap-2 justify-end">
+                <button
+                  onClick={() => {
+                     if (onViewTicket) onViewTicket(selectedTx);
+                  }}
+                  className="px-4 py-2 text-sm font-bold text-slate-700 bg-white border hover:bg-slate-50 rounded-lg transition flex items-center gap-2"
+                >
+                  <FileText size={14} /> Ticket
+                </button>
+
+                {currentUser?.role === 'admin' && selectedTx.status !== 'voided' && (
+                  <button
+                    onClick={() => {
+                      setSelectedTx(null);
+                      if (onEditTransaction) onEditTransaction(selectedTx);
+                    }}
+                    className="px-4 py-2 text-sm font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition flex items-center gap-2"
+                  >
+                    <Edit2 size={14} /> Editar
+                  </button>
+                )}
+
+                {currentUser?.role === 'admin' && selectedTx.status !== 'voided' && (
+                  <button
+                    onClick={() => {
+                      setSelectedTx(null);
+                      if (onDeleteTransaction) onDeleteTransaction(selectedTx);
+                    }}
+                    className="px-4 py-2 text-sm font-bold text-amber-600 bg-amber-50 hover:bg-amber-100 rounded-lg transition flex items-center gap-2"
+                  >
+                    <XCircle size={14} /> Anular
+                  </button>
+                )}
+
+                <button
+                  onClick={() => setSelectedTx(null)}
+                  className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-200 rounded-lg transition"
+                >
+                  Cerrar
+                </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* --- MODAL CREAR / EDITAR SOCIO (EXTERNO) --- */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
@@ -448,6 +570,10 @@ export default function ClientsView({
                 <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">DNI</label><input type="text" className="w-full rounded-lg border border-gray-300 p-2.5 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none font-mono text-sm" placeholder="Sin puntos" value={formData.dni} onChange={(e) => setFormData({...formData, dni: e.target.value})} /></div>
                 <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Teléfono</label><input type="text" className="w-full rounded-lg border border-gray-300 p-2.5 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none font-mono text-sm" placeholder="Cod. Área + Num" value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} /></div>
               </div>
+              
+              {/* CAMPO PUNTOS (SOLO EDITAR O CREAR) */}
+              <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Puntos (Ajuste Manual)</label><input type="number" className="w-full rounded-lg border border-gray-300 p-2.5 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none font-bold text-blue-600" placeholder="0" value={formData.points} onChange={(e) => setFormData({...formData, points: e.target.value})} /></div>
+
               <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Correo Electrónico</label><input type="email" className="w-full rounded-lg border border-gray-300 p-2.5 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none text-sm" placeholder="ejemplo@email.com" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} /></div>
               <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Notas / Extra</label><textarea rows="2" className="w-full rounded-lg border border-gray-300 p-2.5 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none text-sm resize-none" placeholder="Información adicional..." value={formData.extraInfo} onChange={(e) => setFormData({...formData, extraInfo: e.target.value})}></textarea></div>
               <div className="pt-2 flex gap-3">

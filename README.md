@@ -1,20 +1,15 @@
-# React + Vite
+# POV - Punto de Venta (Cotillón)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Sistema de Punto de Venta desarrollado con React + Vite para gestión de comercio de artículos de fiesta.
 
-Currently, two official plugins are available:
+## 🚀 Tecnologías
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **React 19** - UI Library
+- **Vite 7** - Build Tool
+- **Tailwind CSS** (via CDN) - Estilos
+- **Lucide React** - Iconos
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
-
+## 📁 Estructura del Proyecto
 
 ```text
 ├── public/
@@ -26,29 +21,89 @@ If you are developing a production application, we recommend using TypeScript wi
 │   │   ├── react.svg
 │   │   └── vite.svg
 │   ├── components/
-│   │   ├── AppModals.jsx
-│   │   ├── ProductImage.jsx
-│   │   ├── Sidebar.jsx
-│   │   └── TicketPrintLayout.jsx
+│   │   ├── AppModals.jsx          # Modales de la aplicación
+│   │   ├── ProductImage.jsx       # Componente de imagen de producto
+│   │   ├── Sidebar.jsx            # Barra lateral de navegación
+│   │   └── TicketPrintLayout.jsx  # Layout para impresión de tickets
 │   ├── hooks/
-│   │   └── useBarcodeScanner.js
+│   │   ├── useBarcodeScanner.js   # Hook para escaneo de códigos de barras
+│   │   └── useClients.js          # Hook para gestión de clientes/socios
+│   ├── utils/
+│   │   └── helpers.js             # ♻️ Funciones helper centralizadas (DRY)
 │   ├── views/
-│   │   ├── CategoryManagerView.jsx
-│   │   ├── DashboardView.jsx
-│   │   ├── HistoryView.jsx
-│   │   ├── InventoryView.jsx
-│   │   ├── LogsView.jsx
-│   │   └── POSView.jsx
+│   │   ├── CategoryManagerView.jsx # Vista de gestión de categorías
+│   │   ├── ClientsView.jsx         # Vista de gestión de socios
+│   │   ├── DashboardView.jsx       # Vista de control de caja
+│   │   ├── HistoryView.jsx         # Vista de historial de ventas
+│   │   ├── InventoryView.jsx       # Vista de gestión de stock
+│   │   ├── LogsView.jsx            # Vista de registro de acciones
+│   │   └── POSView.jsx             # Vista de punto de venta
 │   ├── App.css
-│   ├── App.jsx
-│   ├── data.js
+│   ├── App.jsx                     # Componente principal
+│   ├── data.js                     # Datos iniciales y constantes
 │   ├── index.css
-│   └── main.jsx
+│   └── main.jsx                    # Entry point
 ├── .env
 ├── .gitignore
 ├── eslint.config.js
 ├── index.html
-├── package-lock.json
 ├── package.json
-├── README.md
 └── vite.config.js
+```
+
+## ⚡ Instalación
+
+```bash
+# Instalar dependencias
+npm install
+
+# Iniciar en modo desarrollo
+npm run dev
+
+# Construir para producción
+npm run build
+
+# Vista previa de producción
+npm run preview
+```
+
+## 🔑 Usuarios de Prueba
+
+| Rol | Contraseña |
+|-----|------------|
+| Dueño | 1234 |
+| Vendedor | 4321 |
+
+## 📝 Características
+
+- **Punto de Venta (POS)**: Venta rápida con escaneo de códigos de barras
+- **Gestión de Inventario**: CRUD de productos con múltiples categorías
+- **Sistema de Socios**: Programa de fidelización con puntos
+- **Control de Caja**: Apertura/cierre con cierre automático programado
+- **Historial**: Registro completo de transacciones y acciones
+- **Impresión de Tickets**: Layout optimizado para impresoras térmicas 58mm
+
+## 🔄 Changelog v0.0.3.2 (Corregido)
+
+### 🔧 FIX
+- Corregido `index.html`: script de Tailwind movido dentro del `<head>`
+- Eliminado Tailwind CDN duplicado
+- Corregida ruta de favicon (`/favicon.svg`)
+
+### ♻️ REFACTOR
+- Creado `src/utils/helpers.js` con funciones centralizadas:
+  - `formatPrice()` - Formato de precios sin decimales
+  - `formatTime24()` - Conversión de hora 12h a 24h
+  - `getGradientForItem()` - Generación de gradientes para placeholders
+  - `normalizeDate()` - Normalización de fechas argentinas
+- Eliminado código duplicado en múltiples archivos (DRY)
+
+## 🧪 Compatibilidad
+
+- ✅ StackBlitz
+- ✅ React + Vite
+- ✅ Node.js 18+
+
+---
+
+*Desarrollado para gestión de Cotillón*

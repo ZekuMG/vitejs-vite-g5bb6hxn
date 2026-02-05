@@ -90,8 +90,84 @@ export default function PartySupplyApp() {
     getInitialState('party_closingTime', '21:00')
   );
 
-  // --- HOOK DE SOCIOS (Modificado: Extraemos update y delete) ---
+  // --- LOGGING CENTRALIZADO (Definido antes para usarse en wrappers) ---
+  const addLog = (action, details, reason = '') => {
+    const newLog = {
+      id: Date.now(),
+      timestamp: new Date().toLocaleTimeString('es-AR', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      }),
+      date: new Date().toLocaleDateString('es-AR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      }),
+      action,
+      user: currentUser?.name || 'Sistema',
+      details,
+      reason,
+    };
+    setDailyLogs((prev) => [newLog, ...prev]);
+  };
+
+  // --- HOOK DE SOCIOS ---
   const { members, addMember, updateMember, deleteMember, addPoints } = useClients();
+
+  // --- WRAPPERS PARA LOGS DE SOCIOS (Intermediarios para registrar acciones) ---
+  
+  const handleAddMemberWithLog = (data) => {
+    const newMember = addMember(data);
+    if (newMember) {
+      addLog('Nuevo Socio', { 
+        name: newMember.name, 
+        number: newMember.memberNumber,
+        initialPoints: newMember.points 
+      }, 'Registro manual de socio');
+    }
+  };
+
+  const handleUpdateMemberWithLog = (id, updates) => {
+    const currentMember = members.find(m => m.id === id);
+    if (!currentMember) return;
+
+    // 1. Detectar cambio de Puntos (Log específico)
+    if (updates.points !== undefined && Number(updates.points) !== currentMember.points) {
+      addLog('Edición de Puntos', {
+        member: currentMember.name,
+        previous: currentMember.points,
+        new: Number(updates.points),
+        diff: Number(updates.points) - currentMember.points
+      }, 'Ajuste manual de saldo');
+    }
+
+    // 2. Detectar otros cambios de datos (Log general)
+    const dataChanged = Object.keys(updates).some(k => 
+      k !== 'points' && k !== 'id' && updates[k] !== currentMember[k]
+    );
+    
+    if (dataChanged) {
+       addLog('Edición de Socio', {
+         member: currentMember.name,
+         updates: Object.keys(updates).filter(k => k !== 'points' && k !== 'id' && updates[k] !== currentMember[k])
+       }, 'Actualización de datos personales');
+    }
+
+    // Aplicar cambio en el hook
+    updateMember(id, updates);
+  };
+
+  const handleDeleteMemberWithLog = (id) => {
+    const member = members.find(m => m.id === id);
+    if (member) {
+      addLog('Baja de Socio', {
+        name: member.name,
+        number: member.memberNumber
+      }, 'Eliminación definitiva');
+    }
+    deleteMember(id);
+  };
 
   // ==========================================
   // 2. ESTADOS DE SESIÓN Y UI
@@ -378,26 +454,7 @@ export default function PartySupplyApp() {
     showNotification('info', 'Código Reemplazado', `Se quitó el código de "${existingProduct.title}".`);
   };
 
-  const addLog = (action, details, reason = '') => {
-    const newLog = {
-      id: Date.now(),
-      timestamp: new Date().toLocaleTimeString('es-AR', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-      }),
-      date: new Date().toLocaleDateString('es-AR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-      }),
-      action,
-      user: currentUser?.name || 'Sistema',
-      details,
-      reason,
-    };
-    setDailyLogs((prev) => [newLog, ...prev]);
-  };
+  // (La función addLog se movió arriba para ser accesible por los wrappers)
 
   const handleLogin = (role) => {
     setCurrentUser(USERS[role]);
@@ -1065,18 +1122,24 @@ export default function PartySupplyApp() {
           {activeTab === 'inventory' && (<InventoryView inventory={inventory} categories={categories} currentUser={currentUser} inventoryViewMode={inventoryViewMode} setInventoryViewMode={setInventoryViewMode} gridColumns={inventoryGridColumns} setGridColumns={setInventoryGridColumns} inventorySearch={inventorySearch} setInventorySearch={setInventorySearch} inventoryCategoryFilter={inventoryCategoryFilter} setInventoryCategoryFilter={setInventoryCategoryFilter} setIsModalOpen={setIsModalOpen} setEditingProduct={(prod) => { setEditingProduct(prod); setEditReason(''); }} handleDeleteProduct={handleDeleteProductRequest} setSelectedImage={setSelectedImage} setIsImageModalOpen={setIsImageModalOpen} />)}
           {activeTab === 'pos' && (isRegisterClosed ? (<div className="h-full flex flex-col items-center justify-center text-slate-400"><Lock size={64} className="mb-4 text-slate-300" /><h3 className="text-xl font-bold text-slate-600">Caja Cerrada</h3>{currentUser.role === 'admin' ? (<><p className="mb-6">Debes abrir la caja para realizar ventas.</p><button onClick={toggleRegisterStatus} className="bg-green-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-green-700">Abrir Caja</button></>) : (<p className="mb-6 text-center">El Dueño debe abrir la caja para realizar ventas.</p>)}</div>) : (<POSView inventory={inventory} categories={categories} addToCart={addToCart} cart={cart} removeFromCart={removeFromCart} updateCartItemQty={updateCartItemQty} selectedPayment={selectedPayment} setSelectedPayment={setSelectedPayment} installments={installments} setInstallments={setInstallments} calculateTotal={calculateTotal} handleCheckout={handleCheckout} posSearch={posSearch} setPosSearch={setPosSearch} selectedCategory={posSelectedCategory} setSelectedCategory={setPosSelectedCategory} posViewMode={posViewMode} setPosViewMode={setPosViewMode} gridColumns={posGridColumns} setGridColumns={setPosGridColumns} selectedClient={posSelectedClient} setSelectedClient={setPosSelectedClient} onOpenClientModal={() => setIsClientModalOpen(true)} />))}
           
-          {/* CLIENTES (SOCIOS) - Ahora recibe props para sincronización y vista de transacciones */}
+          {/* CLIENTES (SOCIOS) */}
           {activeTab === 'clients' && (
             <ClientsView 
               members={members} 
-              updateMember={updateMember}
-              deleteMember={deleteMember}
-              onViewTransaction={handleEditTransactionRequest}
+              // Usamos los WRAPPERS en lugar de las funciones directas
+              addMember={handleAddMemberWithLog} 
+              updateMember={handleUpdateMemberWithLog}
+              deleteMember={handleDeleteMemberWithLog}
+              
+              currentUser={currentUser}
+              onViewTicket={handleViewTicket}
+              onEditTransaction={handleEditTransactionRequest}
+              onDeleteTransaction={handleDeleteTransaction}
               transactions={transactions}
             />
           )}
 
-          {/* HISTORIAL - Ahora usa el helper handleEditTransactionRequest */}
+          {/* HISTORIAL */}
           {activeTab === 'history' && (<HistoryView transactions={transactions} dailyLogs={dailyLogs} inventory={inventory} currentUser={currentUser} showNotification={showNotification} onViewTicket={handleViewTicket} onDeleteTransaction={handleDeleteTransaction} onEditTransaction={handleEditTransactionRequest} setTransactions={setTransactions} setDailyLogs={setDailyLogs} />)}
           
           {activeTab === 'logs' && currentUser.role === 'admin' && (<LogsView dailyLogs={dailyLogs} setDailyLogs={setDailyLogs} inventory={inventory} />)}
@@ -1107,7 +1170,7 @@ export default function PartySupplyApp() {
         isOpen={isClientModalOpen}
         onClose={() => setIsClientModalOpen(false)}
         clients={members} 
-        addClient={addMember} 
+        addClient={handleAddMemberWithLog} // Usamos el wrapper aquí también
         onSelectClient={(client, mode) => {
           setPosSelectedClient(client);
         }}
