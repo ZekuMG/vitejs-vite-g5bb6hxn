@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   X,
   DollarSign,
@@ -17,7 +17,10 @@ import {
   Lock,
   Printer,
   Edit2,
-  FileOutput
+  FileOutput,
+  ScanBarcode,
+  Plus,
+  PackageX
 } from 'lucide-react';
 import { PAYMENT_METHODS } from '../data';
 
@@ -101,7 +104,6 @@ export const NotificationModal = ({ isOpen, onClose, type, title, message }) => 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[100] p-4 backdrop-blur-[2px] animate-in fade-in duration-200">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden scale-100 transform transition-all">
-        {/* Header Decorativo */}
         <div className={`h-2 w-full ${bgHeader}`}></div>
         
         <div className="p-6 flex flex-col items-center text-center">
@@ -123,6 +125,113 @@ export const NotificationModal = ({ isOpen, onClose, type, title, message }) => 
           >
             Entendido
           </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ==========================================
+// MODAL: PRODUCTO NO ENCONTRADO (ESCÁNER)
+// ==========================================
+
+export const BarcodeNotFoundModal = ({ isOpen, scannedCode, onClose, onAddProduct }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[80] p-4 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden">
+        <div className="p-4 bg-gradient-to-r from-slate-700 to-slate-800 text-white">
+          <h3 className="font-bold text-lg flex items-center gap-2">
+            <PackageX size={20} /> Producto No Encontrado
+          </h3>
+        </div>
+        
+        <div className="p-6 text-center">
+          <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <ScanBarcode size={32} className="text-amber-600" />
+          </div>
+          
+          <p className="text-slate-600 mb-2">No se encontró ningún producto con el código:</p>
+          <p className="text-2xl font-mono font-bold text-slate-800 bg-slate-100 px-4 py-2 rounded-lg inline-block mb-6">
+            {scannedCode}
+          </p>
+          
+          <div className="flex gap-3">
+            <button
+              onClick={onClose}
+              className="flex-1 py-3 rounded-lg font-bold border-2 border-slate-200 text-slate-600 hover:bg-slate-50 transition"
+            >
+              Cerrar Ventana
+            </button>
+            <button
+              onClick={() => onAddProduct(scannedCode)}
+              className="flex-1 py-3 rounded-lg font-bold bg-fuchsia-600 text-white hover:bg-fuchsia-700 transition flex items-center justify-center gap-2"
+            >
+              <Plus size={18} /> Agregar Producto
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ==========================================
+// MODAL: CÓDIGO DE BARRAS DUPLICADO
+// ==========================================
+
+export const BarcodeDuplicateModal = ({ isOpen, existingProduct, onClose, onKeepExisting, onReplaceBarcode }) => {
+  if (!isOpen || !existingProduct) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[90] p-4 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden">
+        <div className="p-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white">
+          <h3 className="font-bold text-lg flex items-center gap-2">
+            <AlertTriangle size={20} /> Código Duplicado
+          </h3>
+        </div>
+        
+        <div className="p-6">
+          <p className="text-slate-600 mb-4 text-center">
+            Este código de barras ya está asignado a otro producto:
+          </p>
+          
+          <div className="bg-slate-50 border rounded-lg p-4 mb-6">
+            <div className="flex items-center gap-3">
+              {existingProduct.image ? (
+                <img src={existingProduct.image} alt="" className="w-12 h-12 rounded-lg object-cover border" />
+              ) : (
+                <div className="w-12 h-12 rounded-lg bg-slate-200 flex items-center justify-center">
+                  <ScanBarcode size={20} className="text-slate-400" />
+                </div>
+              )}
+              <div>
+                <p className="font-bold text-slate-800">{existingProduct.title}</p>
+                <p className="text-xs text-slate-500">Código: {existingProduct.barcode}</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="flex gap-3">
+            <button
+              onClick={onKeepExisting}
+              className="flex-1 py-3 rounded-lg font-bold border-2 border-slate-200 text-slate-600 hover:bg-slate-50 transition"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={onReplaceBarcode}
+              className="flex-1 py-3 rounded-lg font-bold bg-amber-500 text-white hover:bg-amber-600 transition"
+            >
+              Reemplazar
+            </button>
+          </div>
+          
+          <p className="text-[10px] text-slate-400 text-center mt-3">
+            "Reemplazar" quitará el código del producto anterior
+          </p>
         </div>
       </div>
     </div>
@@ -186,8 +295,22 @@ export const ClosingTimeModal = ({ isOpen, onClose, closingTime, setClosingTime,
   );
 };
 
-export const AddProductModal = ({ isOpen, onClose, newItem, setNewItem, categories, onImageUpload, onAdd }) => {
+export const AddProductModal = ({ isOpen, onClose, newItem, setNewItem, categories, onImageUpload, onAdd, inventory, onDuplicateBarcode }) => {
   if (!isOpen) return null;
+
+  // Validar código de barras duplicado
+  const handleBarcodeChange = (value) => {
+    setNewItem({ ...newItem, barcode: value });
+    
+    // Verificar si ya existe
+    if (value && value.length >= 3) {
+      const existing = inventory?.find(p => p.barcode === value);
+      if (existing && onDuplicateBarcode) {
+        onDuplicateBarcode(existing, value);
+      }
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
@@ -200,6 +323,22 @@ export const AddProductModal = ({ isOpen, onClose, newItem, setNewItem, categori
             <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Nombre</label>
             <input required type="text" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-fuchsia-500 outline-none" value={newItem.title} onChange={(e) => setNewItem({ ...newItem, title: e.target.value })} />
           </div>
+          
+          {/* CAMPO CÓDIGO DE BARRAS */}
+          <div>
+            <label className="text-xs font-bold text-slate-500 uppercase block mb-1 flex items-center gap-1">
+              <ScanBarcode size={12} /> Código de Barras (Opcional)
+            </label>
+            <input 
+              type="text" 
+              placeholder="Escanear o escribir código..."
+              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-fuchsia-500 outline-none font-mono" 
+              value={newItem.barcode || ''} 
+              onChange={(e) => handleBarcodeChange(e.target.value)} 
+            />
+            <p className="text-[10px] text-slate-400 mt-1">Usado para escaneo rápido en Punto de Venta</p>
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Costo ($)</label>
@@ -238,8 +377,21 @@ export const AddProductModal = ({ isOpen, onClose, newItem, setNewItem, categori
   );
 };
 
-export const EditProductModal = ({ product, onClose, setEditingProduct, categories, onImageUpload, editReason, setEditReason, onSave }) => {
+export const EditProductModal = ({ product, onClose, setEditingProduct, categories, onImageUpload, editReason, setEditReason, onSave, inventory, onDuplicateBarcode }) => {
   if (!product) return null;
+
+  // Validar código de barras duplicado (excluyendo el producto actual)
+  const handleBarcodeChange = (value) => {
+    setEditingProduct({ ...product, barcode: value });
+    
+    if (value && value.length >= 3) {
+      const existing = inventory?.find(p => p.barcode === value && p.id !== product.id);
+      if (existing && onDuplicateBarcode) {
+        onDuplicateBarcode(existing, value);
+      }
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
@@ -252,6 +404,21 @@ export const EditProductModal = ({ product, onClose, setEditingProduct, categori
             <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Nombre</label>
             <input required type="text" className="w-full px-3 py-2 border rounded-lg" value={product.title} onChange={(e) => setEditingProduct({ ...product, title: e.target.value })} />
           </div>
+          
+          {/* CAMPO CÓDIGO DE BARRAS */}
+          <div>
+            <label className="text-xs font-bold text-slate-500 uppercase block mb-1 flex items-center gap-1">
+              <ScanBarcode size={12} /> Código de Barras (Opcional)
+            </label>
+            <input 
+              type="text" 
+              placeholder="Escanear o escribir código..."
+              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-fuchsia-500 outline-none font-mono" 
+              value={product.barcode || ''} 
+              onChange={(e) => handleBarcodeChange(e.target.value)} 
+            />
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Costo ($)</label>
@@ -472,7 +639,6 @@ export const DeleteProductModal = ({ product, onClose, reason, setReason, onConf
 
 // --- MODALES PARA FLUJO DE TICKET ---
 
-// 1. SaleSuccessModal CON BOTÓN VER TICKET
 export const SaleSuccessModal = ({ transaction, onClose, onViewTicket }) => {
   if (!transaction) return null;
   return (
@@ -505,7 +671,6 @@ export const SaleSuccessModal = ({ transaction, onClose, onViewTicket }) => {
   );
 };
 
-// 2. TicketModal (Visualización en Pantalla)
 export const TicketModal = ({ transaction, onClose, onPrint }) => {
   if (!transaction) return null;
   const formattedId = String(transaction.id).padStart(6, '0');

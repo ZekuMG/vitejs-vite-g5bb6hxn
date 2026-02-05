@@ -281,21 +281,39 @@ export default function DashboardView({
     const dayArray = Array.from(daysMap.values());
     
     if (globalFilter === 'month') {
-        const weeks = [
-            { label: 'Sem 1', sales: 0, count: 0, isCurrent: false },
-            { label: 'Sem 2', sales: 0, count: 0, isCurrent: false },
-            { label: 'Sem 3', sales: 0, count: 0, isCurrent: false },
-            { label: 'Sem 4+', sales: 0, count: 0, isCurrent: true },
-        ];
-        
-        dayArray.forEach((d, idx) => {
-            const weekIdx = Math.min(Math.floor(idx / 7), 3);
-            weeks[weekIdx].sales += d.sales;
-            weeks[weekIdx].count += d.count;
-        });
-        return weeks;
-    }
+      // Determinar qué semana es HOY basado en el día del mes
+      const currentDayOfMonth = new Date().getDate();
+      const getCurrentWeekIndex = () => {
+        if (currentDayOfMonth <= 7) return 0;
+        if (currentDayOfMonth <= 14) return 1;
+        if (currentDayOfMonth <= 21) return 2;
+        return 3;
+      };
+      const currentWeekIdx = getCurrentWeekIndex();
 
+      const weeks = [
+          { label: '1-7', sales: 0, count: 0, isCurrent: currentWeekIdx === 0 },
+          { label: '8-14', sales: 0, count: 0, isCurrent: currentWeekIdx === 1 },
+          { label: '15-21', sales: 0, count: 0, isCurrent: currentWeekIdx === 2 },
+          { label: '22+', sales: 0, count: 0, isCurrent: currentWeekIdx === 3 },
+      ];
+      
+      // Asignar ventas basándose en el DÍA DEL MES real de cada transacción
+      filteredData.forEach(tx => {
+        if (!tx.date) return;
+        const dayOfMonth = tx.date.getDate();
+        let weekIdx;
+        if (dayOfMonth <= 7) weekIdx = 0;
+        else if (dayOfMonth <= 14) weekIdx = 1;
+        else if (dayOfMonth <= 21) weekIdx = 2;
+        else weekIdx = 3;
+        
+        weeks[weekIdx].sales += tx.total;
+        weeks[weekIdx].count += 1;
+      });
+
+      return weeks;
+  }
     return dayArray;
   }, [globalFilter, filteredData, currentHour]);
 

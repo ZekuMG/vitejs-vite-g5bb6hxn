@@ -40,7 +40,9 @@ import {
   AutoCloseAlertModal,
   DeleteProductModal,
   NotificationModal,
-  TicketModal // Modal para visualizar el ticket en pantalla
+  TicketModal,
+  BarcodeNotFoundModal,
+  BarcodeDuplicateModal
 } from './components/AppModals';
 
 // Layout de Impresión (Invisible)
@@ -130,6 +132,11 @@ export default function PartySupplyApp() {
   const [transactionToRefund, setTransactionToRefund] = useState(null);
   const [refundReason, setRefundReason] = useState('');
 
+  // Estados para el Escáner de Código de Barras
+  const [barcodeNotFoundModal, setBarcodeNotFoundModal] = useState({ isOpen: false, code: '' });
+  const [barcodeDuplicateModal, setBarcodeDuplicateModal] = useState({ isOpen: false, existingProduct: null, newBarcode: '' });
+  const [pendingBarcodeForNewProduct, setPendingBarcodeForNewProduct] = useState('');
+
   // Inputs temporales
   const [newItem, setNewItem] = useState({
     title: '',
@@ -139,7 +146,7 @@ export default function PartySupplyApp() {
     stock: '',
     categories: [],
     image: '',
-    barcode: '' // Campo nuevo para el código de barras
+    barcode: ''
   });
   const [tempOpeningBalance, setTempOpeningBalance] = useState('');
   const [tempClosingTime, setTempClosingTime] = useState('21:00');
@@ -171,7 +178,32 @@ export default function PartySupplyApp() {
   };
 
   // ==========================================
-  // 5. CÁLCULOS Y EFECTOS
+  // 5. FUNCIÓN DE SONIDO BEEP
+  // ==========================================
+  const playBeep = (success = true) => {
+    try {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      oscillator.frequency.value = success ? 1200 : 400;
+      oscillator.type = 'sine';
+      
+      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+      
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.1);
+    } catch (e) {
+      console.log('Audio not supported');
+    }
+  };
+
+  // ==========================================
+  // 6. CÁLCULOS Y EFECTOS
   // ==========================================
   const calculateTotal = () => {
     const subtotal = cart.reduce(
@@ -227,7 +259,7 @@ export default function PartySupplyApp() {
   }, [currentTime, closingTime, isRegisterClosed]);
 
   // ==========================================
-  // 6. LÓGICA DE NEGOCIO
+  // 7. LÓGICA DE NEGOCIO
   // ==========================================
 
   // Ventas (Funciones definidas antes para usarse en el scanner)
@@ -245,22 +277,96 @@ export default function PartySupplyApp() {
     }
   };
 
-  // --- ACTIVACIÓN DEL ESCÁNER ---
-  useBarcodeScanner({
-    inventory,
-    addToCart: (product) => {
-      // Validamos stock aquí también para feedback inmediato
-      if (product.stock === 0) {
-        showNotification('error', 'Sin Stock', `El producto "${product.title}" está agotado.`);
-        return;
+  // --- LÓGICA DEL ESCÁNER DE CÓDIGO DE BARRAS ---
+  const handleBarcodeScan = (scannedCode) => {
+    // Buscar producto por código de barras
+    const product = inventory.find(
+      (p) => String(p.barcode) === scannedCode
+    );
+
+    if (activeTab === 'pos' && !isRegisterClosed) {
+      // --- MODO POS: Agregar al carrito ---
+      if (product) {
+        if (product.stock === 0) {
+          playBeep(false);
+          showNotification('error', 'Sin Stock', `"${product.title}" está agotado.`);
+          return;
+        }
+        
+        // Verificar si ya está en el carrito y supera el stock
+        const inCart = cart.find(c => c.id === product.id);
+        if (inCart && inCart.quantity >= product.stock) {
+          playBeep(false);
+          showNotification('error', 'Stock Insuficiente', `No quedan más unidades de "${product.title}".`);
+          return;
+        }
+        
+        playBeep(true);
+        addToCart(product);
+        showNotification('success', 'Producto Escaneado', `${product.title} agregado al carrito.`);
+      } else {
+        playBeep(false);
+        setBarcodeNotFoundModal({ isOpen: true, code: scannedCode });
       }
-      addToCart(product);
-      showNotification('success', 'Producto Escaneado', `${product.title} agregado al carrito.`);
-    },
-    onScanError: (code) => {
-      showNotification('warning', 'No Encontrado', `El código ${code} no existe en el sistema.`);
+    } else if (activeTab === 'inventory') {
+      // --- MODO INVENTARIO: Seleccionar producto o mostrar modal ---
+      if (product) {
+        playBeep(true);
+        // Abrir el producto en edición (simula click en el HUD)
+        setEditingProduct(product);
+        setEditReason('');
+      } else {
+        playBeep(false);
+        setBarcodeNotFoundModal({ isOpen: true, code: scannedCode });
+      }
     }
+  };
+
+  // Activar escáner solo en POS e Inventario
+  useBarcodeScanner({
+    isEnabled: (activeTab === 'pos' && !isRegisterClosed) || activeTab === 'inventory',
+    onScan: handleBarcodeScan,
+    ignoreInputs: true
   });
+
+  // Handler: Cerrar modal "No encontrado" y abrir modal de nuevo producto
+  const handleAddProductFromBarcode = (barcode) => {
+    setBarcodeNotFoundModal({ isOpen: false, code: '' });
+    setPendingBarcodeForNewProduct(barcode);
+    setNewItem({
+      title: '',
+      brand: '',
+      price: '',
+      purchasePrice: '',
+      stock: '',
+      categories: [],
+      image: '',
+      barcode: barcode
+    });
+    setIsModalOpen(true);
+  };
+
+  // Handler: Código de barras duplicado detectado
+  const handleDuplicateBarcodeDetected = (existingProduct, newBarcode) => {
+    setBarcodeDuplicateModal({
+      isOpen: true,
+      existingProduct,
+      newBarcode
+    });
+  };
+
+  // Handler: Reemplazar código de barras (quitar del producto anterior)
+  const handleReplaceDuplicateBarcode = () => {
+    const { existingProduct } = barcodeDuplicateModal;
+    
+    // Quitar barcode del producto existente
+    setInventory(inventory.map(p => 
+      p.id === existingProduct.id ? { ...p, barcode: '' } : p
+    ));
+    
+    setBarcodeDuplicateModal({ isOpen: false, existingProduct: null, newBarcode: '' });
+    showNotification('info', 'Código Reemplazado', `Se quitó el código de "${existingProduct.title}".`);
+  };
 
   const addLog = (action, details, reason = '') => {
     const newLog = {
@@ -345,14 +451,10 @@ export default function PartySupplyApp() {
 
   // Función inteligente: Web vs App de Escritorio
   const handlePrintTicket = () => {
-    // 1. Detectar si estamos en Electron (Futura App Instalable)
     if (window.electronAPI && window.electronAPI.printSilent) {
-      // Usar impresión silenciosa nativa
       window.electronAPI.printSilent();
       showNotification('success', 'Imprimiendo...', 'El ticket se envió a la impresora.');
     } else {
-      // 2. Usar impresión Web estándar (Chrome)
-      // Si configuraste el acceso directo con --kiosk-printing, no saldrá diálogo.
       window.print();
     }
   };
@@ -459,7 +561,7 @@ export default function PartySupplyApp() {
       category: newItem.categories[0],
       categories: newItem.categories,
       image: newItem.image || '',
-      barcode: newItem.barcode || '', // GUARDAR BARCODE
+      barcode: newItem.barcode || '',
     };
     setInventory([...inventory, item]);
     addLog('Alta de Producto', item, 'Producto Nuevo');
@@ -471,9 +573,10 @@ export default function PartySupplyApp() {
       stock: '',
       categories: [],
       image: '',
-      barcode: '', // RESETEAR BARCODE
+      barcode: '',
     });
     setIsModalOpen(false);
+    setPendingBarcodeForNewProduct('');
     showNotification('success', 'Producto Agregado', 'El producto se guardó en el inventario.');
   };
 
@@ -568,7 +671,7 @@ export default function PartySupplyApp() {
     const maxId = validIds.length > 0 ? Math.max(...validIds) : 0;
     
     const tx = {
-      id: maxId + 1, // ID Secuencial desde 1
+      id: maxId + 1,
       date: new Date().toLocaleDateString('es-AR'),
       time: new Date().toLocaleTimeString('es-AR', {
         hour: '2-digit',
@@ -1040,7 +1143,7 @@ export default function PartySupplyApp() {
               inventory={inventory}
               currentUser={currentUser}
               showNotification={showNotification}
-              onViewTicket={handleViewTicket} // <--- Pasamos la función nueva
+              onViewTicket={handleViewTicket}
               onDeleteTransaction={handleDeleteTransaction}
               onEditTransaction={(tx) => {
                 const safeTx = JSON.parse(JSON.stringify(tx));
@@ -1162,10 +1265,10 @@ export default function PartySupplyApp() {
 
       {/* --- SECCIÓN DE MODALES CENTRALIZADOS --- */}
       
-      {/* 1. Modal de Impresión (Invisible en Pantalla, Visible al Imprimir) */}
+      {/* Modal de Impresión (Invisible en Pantalla, Visible al Imprimir) */}
       <TicketPrintLayout transaction={ticketToView || saleSuccessModal} />
 
-      {/* 2. Modal de Notificación */}
+      {/* Modal de Notificación */}
       <NotificationModal 
         isOpen={notification.isOpen}
         onClose={closeNotification}
@@ -1194,12 +1297,17 @@ export default function PartySupplyApp() {
 
       <AddProductModal 
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={() => {
+          setIsModalOpen(false);
+          setPendingBarcodeForNewProduct('');
+        }}
         newItem={newItem}
         setNewItem={setNewItem}
         categories={categories}
         onImageUpload={handleImageUpload}
         onAdd={handleAddItem}
+        inventory={inventory}
+        onDuplicateBarcode={handleDuplicateBarcodeDetected}
       />
 
       <EditProductModal 
@@ -1211,6 +1319,8 @@ export default function PartySupplyApp() {
         editReason={editReason}
         setEditReason={setEditReason}
         onSave={saveEditProduct}
+        inventory={inventory}
+        onDuplicateBarcode={handleDuplicateBarcodeDetected}
       />
 
       <EditTransactionModal 
@@ -1255,13 +1365,13 @@ export default function PartySupplyApp() {
       <SaleSuccessModal 
         transaction={saleSuccessModal}
         onClose={() => setSaleSuccessModal(null)}
-        onViewTicket={() => handleViewTicket(saleSuccessModal)} // <--- Nuevo botón
+        onViewTicket={() => handleViewTicket(saleSuccessModal)}
       />
 
       <TicketModal 
         transaction={ticketToView}
         onClose={() => setTicketToView(null)}
-        onPrint={handlePrintTicket} // <--- Función híbrida
+        onPrint={handlePrintTicket}
       />
 
       <AutoCloseAlertModal 
@@ -1276,6 +1386,23 @@ export default function PartySupplyApp() {
         reason={deleteProductReason}
         setReason={setDeleteProductReason}
         onConfirm={confirmDeleteProduct}
+      />
+
+      {/* Modal: Código de barras no encontrado */}
+      <BarcodeNotFoundModal 
+        isOpen={barcodeNotFoundModal.isOpen}
+        scannedCode={barcodeNotFoundModal.code}
+        onClose={() => setBarcodeNotFoundModal({ isOpen: false, code: '' })}
+        onAddProduct={handleAddProductFromBarcode}
+      />
+
+      {/* Modal: Código de barras duplicado */}
+      <BarcodeDuplicateModal 
+        isOpen={barcodeDuplicateModal.isOpen}
+        existingProduct={barcodeDuplicateModal.existingProduct}
+        onClose={() => setBarcodeDuplicateModal({ isOpen: false, existingProduct: null, newBarcode: '' })}
+        onKeepExisting={() => setBarcodeDuplicateModal({ isOpen: false, existingProduct: null, newBarcode: '' })}
+        onReplaceBarcode={handleReplaceDuplicateBarcode}
       />
 
     </div>
