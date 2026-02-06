@@ -1,22 +1,28 @@
+// src/views/HistoryView.jsx
+// ♻️ REFACTOR: Helpers movidos a utils/helpers.js, generador a utils/devGenerator.js,
+//              modales a components/modals/HistoryModals.jsx
+
 import React, { useState, useMemo } from 'react';
 import {
   History,
   Trash2,
   Edit2,
   XCircle,
-  Calendar,
-  ChevronDown,
   Eye,
   X,
   Search,
   Wand2,
-  AlertTriangle,
-  Filter,
   ArrowUpDown,
-  Plus,
-  FileText // Icono para el ticket
+  FileText,
 } from 'lucide-react';
 import { PAYMENT_METHODS } from '../data';
+import { normalizeDate, isVentaLog, getVentaTotal } from '../utils/helpers';
+import { generateRandomTransactions } from '../utils/devGenerator';
+import {
+  TransactionDetailModal,
+  GeneratorModal,
+  DeleteHistoryModal,
+} from '../components/modals/HistoryModals';
 
 export default function HistoryView({
   transactions,
@@ -27,8 +33,8 @@ export default function HistoryView({
   onEditTransaction,
   setTransactions,
   setDailyLogs,
-  showNotification, // Prop para notificaciones
-  onViewTicket      // Prop para ver ticket
+  showNotification,
+  onViewTicket,
 }) {
   // Estados de filtros
   const [viewMode, setViewMode] = useState('all');
@@ -52,61 +58,21 @@ export default function HistoryView({
     dateEnd: '',
     timeStart: '09',
     timeEnd: '21',
-  }); 
+  });
 
   // =====================================================
-  // HELPERS
-  // =====================================================
-  const normalizeDate = (dateStr) => {
-    if (!dateStr) return null;
-    const cleanDate = dateStr.split(',')[0].trim();
-    const parts = cleanDate.split('/');
-    if (parts.length >= 3) {
-      const day = parseInt(parts[0], 10);
-      const month = parseInt(parts[1], 10);
-      const year = parseInt(parts[2], 10);
-      return { day, month, year, str: `${day}/${month}/${year}` };
-    }
-    return null;
-  };
-
-  const isVentaLog = (log) => {
-    const action = log.action || '';
-    return action === 'Venta Realizada' || action === 'Nueva Venta';
-  };
-
-  const getVentaTotal = (details) => {
-    if (!details) return 0;
-    if (details.total !== undefined) return Number(details.total) || 0;
-    if (details.items && Array.isArray(details.items)) {
-      return details.items.reduce((sum, item) => {
-        return (
-          sum +
-          (Number(item.price) || 0) *
-            (Number(item.qty) || Number(item.quantity) || 0)
-        );
-      }, 0);
-    }
-    return 0;
-  };
-
-  // =====================================================
-  // TRANSACCIONES HISTÓRICAS
+  // TRANSACCIONES HISTÓRICAS (desde logs)
   // =====================================================
   const historicTransactions = useMemo(() => {
     const txList = [];
-    // Crear un Set con los IDs que ya están activos para no repetirlos
     const activeIds = new Set((transactions || []).map(t => t.id));
 
     (dailyLogs || []).forEach((log) => {
       if (isVentaLog(log) && log.details) {
         const txId = log.details.transactionId || log.id;
-        
-        // Si el ID ya existe en 'transactions' (activo), lo ignoramos aquí
         if (activeIds.has(txId)) return;
 
         const logDate = normalizeDate(log.date);
-        
         if (logDate) {
           txList.push({
             id: txId,
@@ -119,14 +85,14 @@ export default function HistoryView({
             installments: log.details.installments || 0,
             total: getVentaTotal(log.details),
             status: 'completed',
-            isHistoric: true, // Esto oculta los botones de editar/borrar pero permite ver ticket
+            isHistoric: true,
             sortDate: new Date(logDate.year, logDate.month - 1, logDate.day),
           });
         }
       }
     });
     return txList;
-  }, [dailyLogs, transactions]); 
+  }, [dailyLogs, transactions]);
 
   // =====================================================
   // TRANSACCIONES ACTIVAS
@@ -177,11 +143,9 @@ export default function HistoryView({
     if (filterPayment) {
       txList = txList.filter((tx) => tx.payment === filterPayment);
     }
-
     if (filterUser) {
       txList = txList.filter((tx) => tx.user === filterUser);
     }
-
     if (filterProduct) {
       txList = txList.filter((tx) =>
         (tx.items || []).some((item) =>
@@ -201,14 +165,7 @@ export default function HistoryView({
           item.title?.toLowerCase().includes(query)
         );
         const totalMatch = String(tx.total).includes(query);
-        return (
-          idMatch ||
-          userMatch ||
-          paymentMatch ||
-          dateMatch ||
-          itemsMatch ||
-          totalMatch
-        );
+        return idMatch || userMatch || paymentMatch || dateMatch || itemsMatch || totalMatch;
       });
     }
 
@@ -223,16 +180,9 @@ export default function HistoryView({
 
     return txList;
   }, [
-    viewMode,
-    activeTransactions,
-    historicTransactions,
-    filterDateStart,
-    filterDateEnd,
-    filterPayment,
-    filterUser,
-    filterProduct,
-    searchQuery,
-    sortOrder,
+    viewMode, activeTransactions, historicTransactions,
+    filterDateStart, filterDateEnd, filterPayment,
+    filterUser, filterProduct, searchQuery, sortOrder,
   ]);
 
   const stats = useMemo(() => {
@@ -263,138 +213,32 @@ export default function HistoryView({
   };
 
   const hasActiveFilters =
-    filterDateStart ||
-    filterDateEnd ||
-    filterPayment ||
-    filterUser ||
-    filterProduct ||
-    searchQuery;
+    filterDateStart || filterDateEnd || filterPayment ||
+    filterUser || filterProduct || searchQuery;
 
   // =====================================================
-  // GENERADOR DE PEDIDOS
+  // ACCIONES DEL GENERADOR (delega a devGenerator.js)
   // =====================================================
-  const generateRandomTransactions = () => {
-    const { count, dateStart, dateEnd, timeStart, timeEnd } = generatorConfig;
-    const products = inventory || [];
-    if (products.length === 0) {
-      if (showNotification) showNotification('warning', 'Sin productos', 'No hay productos en el inventario para generar ventas');
-      else alert('No hay productos en el inventario para generar ventas');
+  const handleGenerate = () => {
+    const result = generateRandomTransactions(generatorConfig, inventory);
+
+    if (result.error) {
+      if (showNotification) showNotification('warning', 'Sin productos', result.error);
+      else alert(result.error);
       return;
     }
 
-    const payments = ['Efectivo', 'MercadoPago', 'Debito', 'Credito'];
-    const users = ['Dueño', 'Vendedor'];
-
-    const end = dateEnd ? new Date(dateEnd + 'T23:59:59') : new Date();
-    const start = dateStart
-      ? new Date(dateStart + 'T00:00:00')
-      : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-
-    const startHour = parseInt(timeStart, 10) || 9;
-    const endHour = parseInt(timeEnd, 10) || 21;
-
-    const newLogs = [];
-    const newActiveTransactions = [];
-
-    for (let i = 0; i < count; i++) {
-      const randomTime =
-        start.getTime() + Math.random() * (end.getTime() - start.getTime());
-      const randomDate = new Date(randomTime);
-
-      let randomHour;
-      do {
-        randomHour =
-          startHour + Math.floor(Math.random() * (endHour - startHour));
-      } while (randomHour >= 14 && randomHour < 16);
-
-      const randomMinute = Math.floor(Math.random() * 60);
-
-      const dateStr = randomDate.toLocaleDateString('es-AR');
-      const timeStr = `${randomHour.toString().padStart(2, '0')}:${randomMinute
-        .toString()
-        .padStart(2, '0')}`;
-
-      const numProducts = 1 + Math.floor(Math.random() * 5);
-      const selectedProducts = [];
-      const usedProducts = new Set();
-
-      for (let j = 0; j < numProducts && j < products.length; j++) {
-        let product;
-        let attempts = 0;
-        do {
-          product = products[Math.floor(Math.random() * products.length)];
-          attempts++;
-        } while (usedProducts.has(product.id) && attempts < 10);
-
-        if (!usedProducts.has(product.id)) {
-          usedProducts.add(product.id);
-          const qty = 1 + Math.floor(Math.random() * 4);
-          
-          selectedProducts.push({
-            id: product.id,
-            productId: product.id,
-            title: product.title,
-            price: product.price,
-            qty: qty,
-            categories: product.categories || [],
-            category: product.category || '',
-          });
-        }
-      }
-
-      if (selectedProducts.length === 0) continue;
-
-      const total = selectedProducts.reduce(
-        (sum, p) => sum + p.price * p.qty,
-        0
-      );
-      const payment = payments[Math.floor(Math.random() * payments.length)];
-      const user = users[Math.floor(Math.random() * users.length)];
-      const txId = 1001 + i + Math.floor(Math.random() * 9000); 
-      const installments = payment === 'Credito' ? Math.floor(Math.random() * 6) + 1 : 0;
-
-      newActiveTransactions.push({
-          id: txId,
-          date: dateStr,
-          time: timeStr,
-          user: user,
-          total: total,
-          subtotal: total,
-          payment: payment,
-          installments: installments,
-          items: selectedProducts,
-          status: 'completed',
-      });
-
-      newLogs.push({
-        id: Date.now() + i + Math.random(),
-        timestamp: timeStr,
-        date: dateStr,
-        action: 'Venta Realizada',
-        user: user,
-        details: {
-          transactionId: txId,
-          items: selectedProducts,
-          total: total,
-          payment: payment,
-          installments: installments,
-        },
-        reason: 'Venta generada para pruebas',
-      });
+    if (result.logs.length > 0 && setDailyLogs) {
+      setDailyLogs((prev) => [...result.logs, ...(prev || [])]);
     }
-
-    if (newLogs.length > 0 && setDailyLogs) {
-      setDailyLogs((prev) => [...newLogs, ...(prev || [])]);
-    }
-    
-    if (newActiveTransactions.length > 0 && setTransactions) {
-        setTransactions((prev) => [...newActiveTransactions, ...(prev || [])]);
+    if (result.transactions.length > 0 && setTransactions) {
+      setTransactions((prev) => [...result.transactions, ...(prev || [])]);
     }
 
     setShowGeneratorModal(false);
-    
-    if (showNotification) showNotification('success', 'Generación Exitosa', `Se generaron ${newActiveTransactions.length} pedidos editables.`);
-    else alert(`✅ Se generaron ${newActiveTransactions.length} pedidos editables.`);
+
+    if (showNotification) showNotification('success', 'Generación Exitosa', `Se generaron ${result.transactions.length} pedidos editables.`);
+    else alert(`✅ Se generaron ${result.transactions.length} pedidos editables.`);
   };
 
   const clearAllTransactions = () => {
@@ -403,7 +247,7 @@ export default function HistoryView({
       setDailyLogs((prev) => (prev || []).filter((log) => !isVentaLog(log)));
     }
     setShowDeleteModal(false);
-    
+
     if (showNotification) showNotification('success', 'Historial Limpio', 'Se han eliminado todas las transacciones.');
     else alert('✅ Historial de transacciones eliminado');
   };
@@ -448,10 +292,7 @@ export default function HistoryView({
         <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
           {/* Buscador */}
           <div className="relative min-w-[140px]">
-            <Search
-              size={12}
-              className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400"
-            />
+            <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               placeholder="Buscar..."
@@ -666,7 +507,6 @@ export default function HistoryView({
                   {currentUser.role === 'admin' && (
                     <td className="px-4 py-3 text-center">
                       <div className="flex items-center justify-center gap-1">
-                        {/* Botón Ver Detalles */}
                         <button
                           onClick={() => setSelectedTx(tx)}
                           className="text-slate-500 hover:bg-slate-200 p-1.5 rounded transition"
@@ -675,7 +515,6 @@ export default function HistoryView({
                           <Eye size={14} />
                         </button>
                         
-                        {/* BOTÓN VER TICKET (NUEVO) */}
                         <button
                           onClick={() => onViewTicket(tx)}
                           className="text-slate-700 hover:bg-slate-200 p-1.5 rounded transition"
@@ -684,7 +523,6 @@ export default function HistoryView({
                           <FileText size={14} />
                         </button>
 
-                        {/* Botones Editar y Eliminar (Solo si no es histórico ni anulado) */}
                         {!isHistoric && !isVoided && (
                           <button
                             onClick={() => onEditTransaction(tx)}
@@ -733,300 +571,31 @@ export default function HistoryView({
         </table>
       </div>
 
-      {/* Modal de detalles */}
-      {selectedTx && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[80vh] overflow-hidden">
-            <div className="p-4 border-b bg-slate-50 flex justify-between items-center">
-              <h4 className="font-bold text-slate-800">
-                Venta #{String(selectedTx.id).padStart(6, '0')}
-              </h4>
-              <button
-                onClick={() => setSelectedTx(null)}
-                className="text-slate-400 hover:text-slate-600"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            <div className="p-4 space-y-4 overflow-y-auto max-h-[60vh]">
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <p className="text-slate-400 text-xs">Fecha</p>
-                  <p className="font-bold">
-                    {selectedTx.date} {selectedTx.timestamp}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-slate-400 text-xs">Usuario</p>
-                  <p className="font-bold">{selectedTx.user}</p>
-                </div>
-                <div>
-                  <p className="text-slate-400 text-xs">Pago</p>
-                  <p className="font-bold">{selectedTx.payment}</p>
-                </div>
-                <div>
-                  <p className="text-slate-400 text-xs">Total</p>
-                  <p className="font-bold text-fuchsia-600">
-                    ${selectedTx.total?.toLocaleString()}
-                  </p>
-                </div>
-              </div>
+      {/* ♻️ REFACTOR: Modales extraídos a HistoryModals.jsx */}
+      <TransactionDetailModal
+        transaction={selectedTx}
+        onClose={() => setSelectedTx(null)}
+        currentUser={currentUser}
+        onEditTransaction={onEditTransaction}
+        onDeleteTransaction={onDeleteTransaction}
+        onViewTicket={onViewTicket}
+      />
 
-              <div>
-                <p className="text-slate-400 text-xs mb-2">Productos</p>
-                <div className="space-y-2">
-                  {(selectedTx.items || []).map((item, idx) => (
-                    <div
-                      key={idx}
-                      className="flex justify-between items-center p-2 bg-slate-50 rounded"
-                    >
-                      <div>
-                        <p className="font-medium text-sm">{item.title}</p>
-                        <p className="text-xs text-slate-400">
-                          {item.qty || item.quantity} x $
-                          {item.price?.toLocaleString()}
-                        </p>
-                      </div>
-                      <p className="font-bold text-sm">
-                        $
-                        {(
-                          (item.qty || item.quantity) * item.price
-                        ).toLocaleString()}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+      <GeneratorModal
+        isOpen={showGeneratorModal}
+        onClose={() => setShowGeneratorModal(false)}
+        generatorConfig={generatorConfig}
+        setGeneratorConfig={setGeneratorConfig}
+        onGenerate={handleGenerate}
+      />
 
-            {/* Acciones Modal */}
-            {currentUser.role === 'admin' && (
-              <div className="p-4 border-t bg-slate-50 flex gap-2 justify-end">
-                {/* BOTÓN VER TICKET (NUEVO) */}
-                <button
-                  onClick={() => onViewTicket(selectedTx)}
-                  className="px-4 py-2 text-sm font-bold text-slate-700 bg-white border hover:bg-slate-50 rounded-lg transition flex items-center gap-2"
-                >
-                  <FileText size={14} /> Ticket
-                </button>
-
-                {selectedTx.status !== 'voided' && !selectedTx.isHistoric && (
-                  <button
-                    onClick={() => {
-                      setSelectedTx(null);
-                      onEditTransaction(selectedTx);
-                    }}
-                    className="px-4 py-2 text-sm font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition flex items-center gap-2"
-                  >
-                    <Edit2 size={14} /> Editar
-                  </button>
-                )}
-                {selectedTx.status !== 'voided' && !selectedTx.isHistoric && (
-                  <button
-                    onClick={() => {
-                      setSelectedTx(null);
-                      onDeleteTransaction(selectedTx);
-                    }}
-                    className="px-4 py-2 text-sm font-bold text-amber-600 bg-amber-50 hover:bg-amber-100 rounded-lg transition flex items-center gap-2"
-                  >
-                    <XCircle size={14} /> Anular
-                  </button>
-                )}
-                <button
-                  onClick={() => setSelectedTx(null)}
-                  className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-200 rounded-lg transition"
-                >
-                  Cerrar
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Modal Generador */}
-      {showGeneratorModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
-            <div className="p-4 border-b flex justify-between items-center bg-fuchsia-500">
-              <h4 className="font-bold text-white flex items-center gap-2">
-                <Wand2 size={18} /> Generar Pedidos de Prueba
-              </h4>
-              <button
-                onClick={() => setShowGeneratorModal(false)}
-                className="text-white/80 hover:text-white"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            <div className="p-4 space-y-4">
-              <div>
-                <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">
-                  Cantidad
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  max="200"
-                  className="w-full px-3 py-2 border rounded-lg text-sm"
-                  value={generatorConfig.count}
-                  onChange={(e) =>
-                    setGeneratorConfig({
-                      ...generatorConfig,
-                      count: parseInt(e.target.value) || 1,
-                    })
-                  }
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">
-                    Desde
-                  </label>
-                  <input
-                    type="date"
-                    className="w-full px-3 py-2 border rounded-lg text-sm"
-                    value={generatorConfig.dateStart}
-                    onChange={(e) =>
-                      setGeneratorConfig({
-                        ...generatorConfig,
-                        dateStart: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">
-                    Hasta
-                  </label>
-                  <input
-                    type="date"
-                    className="w-full px-3 py-2 border rounded-lg text-sm"
-                    value={generatorConfig.dateEnd}
-                    onChange={(e) =>
-                      setGeneratorConfig({
-                        ...generatorConfig,
-                        dateEnd: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">
-                    Hora inicio
-                  </label>
-                  <select
-                    className="w-full px-3 py-2 border rounded-lg text-sm"
-                    value={generatorConfig.timeStart}
-                    onChange={(e) =>
-                      setGeneratorConfig({
-                        ...generatorConfig,
-                        timeStart: e.target.value,
-                      })
-                    }
-                  >
-                    {Array.from({ length: 13 }, (_, i) => i + 9).map((h) => (
-                      <option key={h} value={h.toString().padStart(2, '0')}>
-                        {h}:00 hs
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">
-                    Hora fin
-                  </label>
-                  <select
-                    className="w-full px-3 py-2 border rounded-lg text-sm"
-                    value={generatorConfig.timeEnd}
-                    onChange={(e) =>
-                      setGeneratorConfig({
-                        ...generatorConfig,
-                        timeEnd: e.target.value,
-                      })
-                    }
-                  >
-                    {Array.from({ length: 13 }, (_, i) => i + 9).map((h) => (
-                      <option key={h} value={h.toString().padStart(2, '0')}>
-                        {h}:00 hs
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="bg-fuchsia-50 border border-fuchsia-200 rounded-lg p-3 text-xs text-fuchsia-700">
-                <p>
-                  ⚡ Se generarán ventas aleatorias con productos del
-                  inventario. Horarios de 14-16 hs serán omitidos.
-                </p>
-              </div>
-            </div>
-            <div className="p-4 border-t flex gap-2 justify-end">
-              <button
-                onClick={() => setShowGeneratorModal(false)}
-                className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={generateRandomTransactions}
-                className="px-4 py-2 text-sm bg-fuchsia-500 text-white rounded-lg font-bold hover:bg-fuchsia-600 transition"
-              >
-                Generar {generatorConfig.count} Pedidos
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Eliminar */}
-      {showDeleteModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full">
-            <div className="p-4 border-b flex justify-between items-center bg-red-500">
-              <h4 className="font-bold text-white flex items-center gap-2">
-                <AlertTriangle size={18} /> Eliminar Historial
-              </h4>
-              <button
-                onClick={() => setShowDeleteModal(false)}
-                className="text-white/80 hover:text-white"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            <div className="p-4">
-              <p className="text-sm text-slate-600 mb-4">
-                Esta acción eliminará <strong>todas las transacciones</strong>.
-                No se puede deshacer.
-              </p>
-              <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-700">
-                <p className="font-bold">Se eliminarán:</p>
-                <p>• {(transactions || []).length} transacciones del día</p>
-                <p>• {historicTransactions.length} transacciones históricas</p>
-              </div>
-            </div>
-            <div className="p-4 border-t flex gap-2 justify-end">
-              <button
-                onClick={() => setShowDeleteModal(false)}
-                className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={clearAllTransactions}
-                className="px-4 py-2 text-sm bg-red-500 text-white rounded-lg font-bold hover:bg-red-600 transition"
-              >
-                Eliminar Todo
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <DeleteHistoryModal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        activeCount={(transactions || []).length}
+        historicCount={historicTransactions.length}
+        onConfirm={clearAllTransactions}
+      />
     </div>
   );
 }

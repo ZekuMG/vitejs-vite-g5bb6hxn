@@ -71,6 +71,38 @@ export const formatPrice = (amount) => {
    * @param {string} dateStr - La fecha a normalizar
    * @returns {object|null} - Objeto con day, month, year, str o null si inválido
    */
+  /**
+   * Determina si un log corresponde a una venta.
+   * Usado en HistoryView y DashboardView para filtrar logs de ventas.
+   * @param {object} log - Entrada de log
+   * @returns {boolean}
+   */
+  export const isVentaLog = (log) => {
+    const action = log.action || '';
+    return action === 'Venta Realizada' || action === 'Nueva Venta';
+  };
+
+  /**
+   * Calcula el total de una venta a partir de los detalles del log.
+   * Maneja tanto details.total directo como suma de items.
+   * @param {object} details - Detalles de la venta del log
+   * @returns {number} - Total calculado
+   */
+  export const getVentaTotal = (details) => {
+    if (!details) return 0;
+    if (details.total !== undefined) return Number(details.total) || 0;
+    if (details.items && Array.isArray(details.items)) {
+      return details.items.reduce((sum, item) => {
+        return (
+          sum +
+          (Number(item.price) || 0) *
+            (Number(item.qty) || Number(item.quantity) || 0)
+        );
+      }, 0);
+    }
+    return 0;
+  };
+
   export const normalizeDate = (dateStr) => {
     if (!dateStr) return null;
     const cleanDate = dateStr.split(',')[0].trim();
