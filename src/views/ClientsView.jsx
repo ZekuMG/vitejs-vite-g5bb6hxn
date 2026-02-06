@@ -1,3 +1,4 @@
+// src/views/ClientsView.jsx
 import React, { useState, useEffect } from 'react';
 import { 
   Search, 
@@ -14,7 +15,8 @@ import {
   FileText,
   AlertTriangle,
   Trophy,
-  XCircle
+  XCircle,
+  Printer // [Nuevo Import]
 } from 'lucide-react';
 
 export default function ClientsView({ 
@@ -150,6 +152,24 @@ export default function ClientsView({
       setSelectedTx(transaction);
     } else {
       alert('La transacción no se encuentra en el historial activo.');
+    }
+  };
+
+  // --- NUEVO HANDLER: IMPRIMIR TICKET PUNTOS ---
+  const handlePrintPoints = () => {
+    if (!selectedMember) return;
+    
+    // Construimos un objeto especial para el layout de impresión
+    const pointsTicketData = {
+      isPointsTicket: true, // Bandera para identificar el tipo de ticket
+      client: selectedMember,
+      date: new Date().toLocaleDateString('es-AR'),
+      time: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }),
+      id: selectedMember.memberNumber // Usamos num socio como referencia
+    };
+
+    if (onViewTicket) {
+      onViewTicket(pointsTicketData);
     }
   };
 
@@ -361,7 +381,7 @@ export default function ClientsView({
                 /* MODO VISTA */
                 <>
                   {/* Tarjeta de Saldo */}
-                  <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-2xl p-6 text-white shadow-lg mb-8 relative overflow-hidden">
+                  <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-2xl p-6 text-white shadow-lg mb-4 relative overflow-hidden">
                     <div className="relative z-10">
                       <p className="text-blue-100 text-sm font-medium mb-1 uppercase tracking-wide">Saldo de Puntos</p>
                       <div className="flex items-baseline gap-2">
@@ -371,6 +391,14 @@ export default function ClientsView({
                     </div>
                     <div className="absolute right-0 top-0 opacity-10 transform translate-x-4 -translate-y-4"><User size={120} /></div>
                   </div>
+
+                  {/* Botón Imprimir Ticket Puntos (NUEVO) */}
+                  <button
+                    onClick={handlePrintPoints}
+                    className="w-full mb-6 py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition shadow-lg flex items-center justify-center gap-2 active:scale-95"
+                  >
+                    <Printer size={20} /> Imprimir Ticket de Puntos
+                  </button>
 
                   {/* Historial Timeline */}
                   <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2 text-sm uppercase tracking-wider">

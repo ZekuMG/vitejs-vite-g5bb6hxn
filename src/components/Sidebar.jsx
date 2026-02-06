@@ -9,6 +9,7 @@ import {
   FileText,
   Tag,
   Users,
+  Gift // [NUEVO] Importamos el icono de regalo
 } from 'lucide-react';
 
 const SidebarButton = ({ onClick, isActive, icon: Icon, label }) => {
@@ -86,13 +87,22 @@ export default function Sidebar({
           icon={Users}
           label="Clientes"
         />
+        {/* [NUEVO] Botón de Premios / Canje */}
         <SidebarButton
+          onClick={() => setActiveTab('rewards')}
+          isActive={activeTab === 'rewards'}
+          icon={Gift}
+          label="Premios"
+        />
+      </nav>
+
+      {/* Botón Historial (Se mantiene abajo según tu diseño anterior) */}
+      <SidebarButton
           onClick={() => setActiveTab('history')}
           isActive={activeTab === 'history'}
           icon={History}
           label="Historial"
         />
-      </nav>
 
       <div
         className="pt-4 border-t border-slate-800 w-full flex flex-col items-center gap-3 relative"
