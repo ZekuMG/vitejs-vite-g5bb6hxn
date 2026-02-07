@@ -14,9 +14,10 @@ import { isVentaLog } from '../utils/helpers';
  * @param {Array} params.inventory - Inventario actual
  * @param {string} params.globalFilter - 'day' | 'week' | 'month'
  * @param {string} params.rankingMode - 'products' | 'categories'
+ * @param {Array} params.expenses - Gastos registrados
  * @returns {object} Datos calculados para el Dashboard
  */
-export default function useDashboardData({ transactions, dailyLogs, inventory, globalFilter, rankingMode }) {
+export default function useDashboardData({ transactions, dailyLogs, inventory, globalFilter, rankingMode, expenses = [] }) {
   const todayStr = useMemo(() => new Date().toLocaleDateString('es-AR'), []);
   const currentHour = new Date().getHours();
 
@@ -35,13 +36,13 @@ export default function useDashboardData({ transactions, dailyLogs, inventory, g
   };
 
   // =====================================================
-  // DATOS FILTRADOS POR PERÍODO
+  // HELPER: Filtro de rango por período (reutilizable)
   // =====================================================
-  const filteredData = useMemo(() => {
+  const isInRange = useMemo(() => {
     const now = new Date();
     const oneDay = 24 * 60 * 60 * 1000;
 
-    const isInRange = (dateObj) => {
+    return (dateObj) => {
       if (!dateObj) return false;
       const dateStr = dateObj.toLocaleDateString('es-AR');
 
@@ -55,7 +56,12 @@ export default function useDashboardData({ transactions, dailyLogs, inventory, g
       }
       return false;
     };
+  }, [globalFilter, todayStr]);
 
+  // =====================================================
+  // DATOS FILTRADOS POR PERÍODO (Ventas)
+  // =====================================================
+  const filteredData = useMemo(() => {
     const validTransactions = [];
     const processedTxIds = new Set();
 
@@ -90,7 +96,49 @@ export default function useDashboardData({ transactions, dailyLogs, inventory, g
     });
 
     return validTransactions;
-  }, [globalFilter, transactions, dailyLogs, todayStr]);
+  }, [globalFilter, transactions, dailyLogs, todayStr, isInRange]);
+
+  // =====================================================
+  // GASTOS FILTRADOS POR PERÍODO
+  // =====================================================
+  const filteredExpenses = useMemo(() => {
+    return (expenses || []).filter(exp => {
+      const expDate = parseDate(exp.date);
+      return isInRange(expDate);
+    });
+  }, [expenses, isInRange]);
+
+  // =====================================================
+  // EXPENSE STATS: Total, Cantidad, Desglose por Categoría
+  // =====================================================
+  const expenseStats = useMemo(() => {
+    const total = filteredExpenses.reduce((acc, exp) => acc + (Number(exp.amount) || 0), 0);
+    const count = filteredExpenses.length;
+
+    // Desglose por categoría
+    const byCategory = {};
+    filteredExpenses.forEach(exp => {
+      const cat = exp.category || 'Otros';
+      if (!byCategory[cat]) byCategory[cat] = { name: cat, total: 0, count: 0 };
+      byCategory[cat].total += (Number(exp.amount) || 0);
+      byCategory[cat].count += 1;
+    });
+
+    // Desglose por método de pago
+    const byPayment = {};
+    filteredExpenses.forEach(exp => {
+      const method = exp.paymentMethod || 'Efectivo';
+      if (!byPayment[method]) byPayment[method] = { name: method, total: 0 };
+      byPayment[method].total += (Number(exp.amount) || 0);
+    });
+
+    return {
+      total,
+      count,
+      byCategory: Object.values(byCategory).sort((a, b) => b.total - a.total),
+      byPayment: Object.values(byPayment).sort((a, b) => b.total - a.total),
+    };
+  }, [filteredExpenses]);
 
   // =====================================================
   // KPIs: VENTAS, INGRESO BRUTO, GANANCIA NETA
@@ -111,8 +159,11 @@ export default function useDashboardData({ transactions, dailyLogs, inventory, g
       net += (tx.total - cost);
     });
 
+    // Descontar gastos del período para obtener la ganancia neta real
+    net -= expenseStats.total;
+
     return { gross, net, count };
-  }, [filteredData, inventory]);
+  }, [filteredData, inventory, expenseStats]);
 
   const averageTicket = kpiStats.count > 0 ? kpiStats.gross / kpiStats.count : 0;
 
@@ -296,5 +347,6 @@ export default function useDashboardData({ transactions, dailyLogs, inventory, g
     rankingStats,
     lowStockProducts,
     getEmptyStateMessage,
+    expenseStats,
   };
 }

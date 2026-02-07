@@ -27,10 +27,9 @@ import HistoryView from './views/HistoryView';
 import LogsView from './views/LogsView';
 import CategoryManagerView from './views/CategoryManagerView';
 import RewardsView from './views/RewardsView';
-// [NUEVO] Importamos la vista de historial de reportes
 import ReportsHistoryView from './views/ReportsHistoryView';
 
-// Modales (UI separada)
+// Modales
 import {
   OpeningBalanceModal,
   ClosingTimeModal,
@@ -50,11 +49,10 @@ import {
   ClientSelectionModal
 } from './components/AppModals';
 
-// Import necesario para el ticket
-import { TicketPrintLayout } from './components/TicketPrintLayout';
-
-// Importamos el Modal de Canje (POS)
+// Modales Nuevos
+import { ExpenseModal } from './components/modals/ExpenseModal';
 import { RedemptionModal } from './components/modals/RedemptionModal';
+import { TicketPrintLayout } from './components/TicketPrintLayout';
 
 // Hooks
 import { useBarcodeScanner } from './hooks/useBarcodeScanner';
@@ -77,16 +75,17 @@ export default function PartySupplyApp() {
     }));
   });
 
-  // Estado para Recompensas (Seed Inicial)
+  const [categories, setCategories] = useState(() =>
+    getInitialState('party_categories', INITIAL_CATEGORIES)
+  );
+  
+  // Rewards (NUEVO)
   const [rewards, setRewards] = useState(() => getInitialState('party_rewards', [
     { id: 'rew-001', title: 'Voucher $500', type: 'discount', discountAmount: 500, pointsCost: 300, description: 'Descuento aplicable en cualquier compra.' },
     { id: 'rew-002', title: 'Voucher $1000', type: 'discount', discountAmount: 1000, pointsCost: 550, description: 'Descuento para compras superiores a $2000.' },
     { id: 'rew-003', title: 'Voucher $2000', type: 'discount', discountAmount: 2000, pointsCost: 1000, description: 'Super descuento para socios fieles.' },
   ]));
 
-  const [categories, setCategories] = useState(() =>
-    getInitialState('party_categories', INITIAL_CATEGORIES)
-  );
   const [transactions, setTransactions] = useState(() =>
     getInitialState('party_transactions', INITIAL_TRANSACTIONS)
   );
@@ -94,9 +93,14 @@ export default function PartySupplyApp() {
     getInitialState('party_logs', INITIAL_LOGS)
   );
   
-  // [NUEVO] Historial de Cierres de Caja (Reportes)
+  // Reportes Históricos (NUEVO)
   const [pastClosures, setPastClosures] = useState(() => 
     getInitialState('party_closures', [])
+  );
+
+  // Gastos del Día (NUEVO)
+  const [expenses, setExpenses] = useState(() => 
+    getInitialState('party_expenses', [])
   );
 
   const [openingBalance, setOpeningBalance] = useState(() =>
@@ -134,7 +138,6 @@ export default function PartySupplyApp() {
   // --- HOOK DE SOCIOS ---
   const { members, addMember, updateMember, deleteMember, addPoints } = useClients();
 
-  // --- WRAPPERS PARA LOGS DE SOCIOS ---
   const handleAddMemberWithLog = (data) => {
     const newMember = addMember(data);
     if (newMember) {
@@ -151,7 +154,6 @@ export default function PartySupplyApp() {
     const currentMember = members.find(m => m.id === id);
     if (!currentMember) return;
 
-    // 1. Detectar cambio de Puntos
     let pointsDiffData = null;
     if (updates.points !== undefined && Number(updates.points) !== currentMember.points) {
       pointsDiffData = {
@@ -161,10 +163,8 @@ export default function PartySupplyApp() {
       };
     }
 
-    // 2. Detectar otros cambios de datos
     const changes = [];
     Object.keys(updates).forEach(key => {
-      // Ignoramos 'points' (ya manejado arriba) y 'id'
       if (key !== 'points' && key !== 'id' && updates[key] !== currentMember[key]) {
         changes.push({
           field: key,
@@ -174,7 +174,6 @@ export default function PartySupplyApp() {
       }
     });
 
-    // 3. Generar UN SOLO Log inteligente
     if (pointsDiffData && changes.length > 0) {
       addLog('Edición de Socio', {
         member: currentMember.name,
@@ -238,36 +237,30 @@ export default function PartySupplyApp() {
   const [saleSuccessModal, setSaleSuccessModal] = useState(null);
   const [isAutoCloseAlertOpen, setIsAutoCloseAlertOpen] = useState(false);
   
-  // Estado para el Ticket que se está visualizando
   const [ticketToView, setTicketToView] = useState(null);
 
-  // Eliminar producto
   const [isDeleteProductModalOpen, setIsDeleteProductModalOpen] = useState(false);
   const [productToDelete, setProductToDelete] = useState(null);
   const [deleteProductReason, setDeleteProductReason] = useState('');
 
-  // Editar producto
   const [editingProduct, setEditingProduct] = useState(null);
   const [editReason, setEditReason] = useState('');
 
-  // Editar transacción / Devolución
   const [editingTransaction, setEditingTransaction] = useState(null);
   const [transactionSearch, setTransactionSearch] = useState('');
   const [isRefundModalOpen, setIsRefundModalOpen] = useState(false);
   const [transactionToRefund, setTransactionToRefund] = useState(null);
   const [refundReason, setRefundReason] = useState('');
 
-  // Estados para el Escáner de Código de Barras
   const [barcodeNotFoundModal, setBarcodeNotFoundModal] = useState({ isOpen: false, code: '' });
   const [barcodeDuplicateModal, setBarcodeDuplicateModal] = useState({ isOpen: false, existingProduct: null, newBarcode: '' });
   const [pendingBarcodeForNewProduct, setPendingBarcodeForNewProduct] = useState('');
 
-  // --- NUEVOS ESTADOS: CLIENTE EN POS ---
+  // Estados nuevos
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const [posSelectedClient, setPosSelectedClient] = useState(null);
-
-  // [NUEVO] Estado Modal de Canje
   const [isRedemptionModalOpen, setIsRedemptionModalOpen] = useState(false);
+  const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
 
   // Inputs temporales
   const [newItem, setNewItem] = useState({
@@ -291,12 +284,9 @@ export default function PartySupplyApp() {
   const [inventorySearch, setInventorySearch] = useState('');
   const [posSearch, setPosSearch] = useState('');
   
-  // -- NUEVOS ESTADOS PERSISTENTES PARA POS --
   const [posSelectedCategory, setPosSelectedCategory] = useState('Todas');
   const [posViewMode, setPosViewMode] = useState('grid');
   const [posGridColumns, setPosGridColumns] = useState(4);
-
-  // -- NUEVOS ESTADOS PERSISTENTES PARA INVENTARIO --
   const [inventoryGridColumns, setInventoryGridColumns] = useState(5);
 
   // ==========================================
@@ -370,12 +360,11 @@ export default function PartySupplyApp() {
   // Persistencia
   useEffect(() => { window.localStorage.setItem('party_inventory', JSON.stringify(inventory)); }, [inventory]);
   useEffect(() => { window.localStorage.setItem('party_categories', JSON.stringify(categories)); }, [categories]);
-  // [NUEVO] Persistencia de recompensas
   useEffect(() => { window.localStorage.setItem('party_rewards', JSON.stringify(rewards)); }, [rewards]);
   useEffect(() => { window.localStorage.setItem('party_transactions', JSON.stringify(transactions)); }, [transactions]);
   useEffect(() => { window.localStorage.setItem('party_logs', JSON.stringify(dailyLogs)); }, [dailyLogs]);
-  // [NUEVO] Persistencia de reportes
   useEffect(() => { window.localStorage.setItem('party_closures', JSON.stringify(pastClosures)); }, [pastClosures]);
+  useEffect(() => { window.localStorage.setItem('party_expenses', JSON.stringify(expenses)); }, [expenses]);
   useEffect(() => { window.localStorage.setItem('party_openingBalance', JSON.stringify(openingBalance)); }, [openingBalance]);
   useEffect(() => { window.localStorage.setItem('party_isRegisterClosed', JSON.stringify(isRegisterClosed)); }, [isRegisterClosed]);
   useEffect(() => { window.localStorage.setItem('party_closingTime', JSON.stringify(closingTime)); }, [closingTime]);
@@ -405,6 +394,20 @@ export default function PartySupplyApp() {
   // ==========================================
   // 7. LÓGICA DE NEGOCIO
   // ==========================================
+
+  // --- GASTOS ---
+  const handleAddExpense = (expenseData) => {
+    const newExpense = {
+      id: Date.now(),
+      ...expenseData,
+      date: new Date().toLocaleDateString('es-AR'),
+      time: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }),
+      user: currentUser.name
+    };
+    setExpenses([...expenses, newExpense]);
+    addLog('Gasto Registrado', { amount: newExpense.amount, category: newExpense.category }, 'Salida de dinero');
+    showNotification('success', 'Gasto Registrado', 'Se guardó correctamente.');
+  };
 
   const addToCart = (item) => {
     if (item.stock === 0) return;
@@ -544,6 +547,10 @@ export default function PartySupplyApp() {
   const handleImageUpload = (e, isEditing = false) => {
     const file = e.target.files[0];
     if (file) {
+      if (file.size > 500 * 1024) {
+        showNotification('error', 'Error de Imagen', 'La imagen es muy pesada (>500KB).');
+        return;
+      }
       const reader = new FileReader();
       reader.onloadend = () => {
         if (isEditing) {
@@ -593,45 +600,33 @@ export default function PartySupplyApp() {
     }
   };
 
-  // --- LÓGICA MEJORADA: CIERRE DE CAJA Y GENERACIÓN DE REPORTE ---
+  // --- LÓGICA DE CIERRE COMPLETA ---
   const executeRegisterClose = (isAuto = false) => {
-    // 1. Calcular Métricas para el Reporte
     const closeDate = new Date();
     
-    // a. Desglose de Ventas por Producto (Stock Vendido)
+    // 1. Desglose de Ventas por Producto
     const itemsSoldMap = {};
-    let totalCost = 0; // Costo de Mercadería Vendida (CMV)
+    let totalCost = 0; 
 
     validTransactions.forEach(tx => {
       tx.items.forEach(item => {
-        // Intentamos obtener el costo original. Si no está en el item, lo buscamos en inventario.
         const inventoryItem = inventory.find(p => p.id === (item.productId || item.id));
         const cost = Number(inventoryItem?.purchasePrice || 0);
         
-        if (!itemsSoldMap[item.id]) {
-          itemsSoldMap[item.id] = {
-            id: item.id,
-            title: item.title,
-            qty: 0,
-            revenue: 0,
-            cost: 0
-          };
-        }
+        if (!itemsSoldMap[item.id]) itemsSoldMap[item.id] = { id: item.id, title: item.title, qty: 0, revenue: 0, cost: 0 };
         
         const qty = Number(item.qty || item.quantity || 0);
-        const price = Number(item.price || 0); // Precio de venta
+        const price = Number(item.price || 0);
         
         itemsSoldMap[item.id].qty += qty;
         itemsSoldMap[item.id].revenue += (price * qty); 
         itemsSoldMap[item.id].cost += (cost * qty);
-        
         totalCost += (cost * qty);
       });
     });
-
     const itemsSoldList = Object.values(itemsSoldMap);
 
-    // b. Desglose por Método de Pago
+    // 2. Desglose Métodos de Pago
     const paymentMethodsSummary = {};
     validTransactions.forEach(tx => {
       const method = tx.payment || 'Otros';
@@ -639,13 +634,26 @@ export default function PartySupplyApp() {
       paymentMethodsSummary[method] += Number(tx.total);
     });
 
-    // c. Ticket Promedio
+    // 3. Cálculos de Gastos
+    const totalExpenses = expenses.reduce((acc, curr) => acc + Number(curr.amount), 0);
+    const cashExpenses = expenses
+        .filter(e => e.paymentMethod === 'Efectivo')
+        .reduce((acc, curr) => acc + Number(curr.amount), 0);
+
+    // 4. Métricas Finales
     const averageTicket = salesCount > 0 ? (totalSales / salesCount) : 0;
+    
+    // Ganancia Neta
+    const netProfit = totalSales - totalCost - totalExpenses;
 
-    // d. Ganancia Neta
-    const netProfit = totalSales - totalCost;
+    // Saldo Final Físico
+    const cashSales = validTransactions
+        .filter(t => t.payment === 'Efectivo')
+        .reduce((acc, t) => acc + Number(t.total), 0);
+        
+    const finalPhysicalBalance = openingBalance + cashSales - cashExpenses;
 
-    // 2. Crear Objeto Reporte
+    // 5. Crear Reporte
     const report = {
       id: `rep-${Date.now()}`,
       date: closeDate.toLocaleDateString('es-AR'),
@@ -654,49 +662,31 @@ export default function PartySupplyApp() {
       user: currentUser?.name || 'Automático',
       type: isAuto ? 'Automático' : 'Manual',
       
-      // Financiero
-      openingBalance: openingBalance,
-      totalSales: totalSales,
-      finalBalance: openingBalance + totalSales,
-      totalCost: totalCost,
-      netProfit: netProfit,
+      openingBalance,
+      totalSales,
+      finalBalance: finalPhysicalBalance,
+      totalCost,
+      totalExpenses,
+      netProfit,
       
-      // Métricas
-      salesCount: salesCount,
-      averageTicket: averageTicket,
+      salesCount,
+      averageTicket,
       
-      // Desgloses
       paymentMethods: paymentMethodsSummary,
       itemsSold: itemsSoldList,
-      transactionsSnapshot: [...validTransactions] // Guardamos snapshot por seguridad
+      transactionsSnapshot: [...validTransactions],
+      expensesSnapshot: [...expenses]
     };
 
-    // 3. Guardar Reporte en Historial
     setPastClosures([report, ...pastClosures]);
 
-    // 4. Proceder al Cierre
+    // 6. Limpieza
     setIsRegisterClosed(true);
-    
-    addLog(
-      'Cierre de Caja',
-      {
-        salesCount: salesCount,
-        totalSales: totalSales,
-        openingBalance: openingBalance,
-        finalBalance: openingBalance + totalSales,
-        closingTime: new Date().toLocaleTimeString('es-AR'),
-        scheduledClosingTime: closingTime,
-        type: isAuto ? 'automatic' : 'manual',
-        reportId: report.id // Referencia al reporte generado
-      },
-      isAuto ? 'Cierre Automático por Horario' : 'Cierre de jornada'
-    );
-    
+    addLog('Cierre de Caja', { totalSales, reportId: report.id }, isAuto ? 'Automático' : 'Manual');
     setTransactions([]);
+    setExpenses([]); 
     setIsClosingCashModalOpen(false);
-    if (isAuto) {
-      setIsAutoCloseAlertOpen(true);
-    }
+    if (isAuto) setIsAutoCloseAlertOpen(true);
     
     showNotification('success', 'Reporte Generado', 'Se ha guardado el reporte del día en el historial.');
   };
@@ -874,79 +864,10 @@ export default function PartySupplyApp() {
   };
   const removeFromCart = (id) => setCart(cart.filter((c) => c.id !== id));
 
-  // --- LÓGICA DE CANJE (NUEVO) ---
-  const handleRedeemReward = (reward) => {
-    if (!posSelectedClient) return;
-
-    // Validación Doble
-    if (posSelectedClient.points < reward.pointsCost) {
-      showNotification('error', 'Puntos Insuficientes', 'El socio no tiene saldo suficiente.');
-      return;
-    }
-
-    if (reward.type === 'product') {
-      // Caso 1: Producto Físico (Gratis)
-      const cartItem = {
-        id: `rew-${Date.now()}`,
-        title: reward.title,
-        price: 0, // GRATIS
-        originalPrice: 0, 
-        quantity: 1,
-        isReward: true,
-        pointsCost: reward.pointsCost,
-        type: 'product'
-      };
-      setCart([...cart, cartItem]);
-
-    } else if (reward.type === 'discount') {
-      // Caso 2: Descuento Monetario
-      const cartItem = {
-        id: `desc-${Date.now()}`,
-        title: `Canje: ${reward.title}`,
-        price: -Math.abs(reward.discountAmount), // PRECIO NEGATIVO
-        quantity: 1,
-        isReward: true,
-        pointsCost: reward.pointsCost,
-        type: 'discount'
-      };
-      setCart([...cart, cartItem]);
-    }
-
-    showNotification('success', 'Premio Agregado', 'La recompensa se añadió al carrito.');
-    setIsRedemptionModalOpen(false);
-  };
-
-  // --- LOGICA GESTIÓN PREMIOS (CRUD) ---
-  const handleAddReward = (reward) => {
-    const newReward = {
-      ...reward,
-      id: `rew-${Date.now()}`
-    };
-    setRewards([...rewards, newReward]);
-    addLog('Nuevo Premio', { title: newReward.title, cost: newReward.pointsCost }, 'Gestión Catálogo');
-    showNotification('success', 'Premio Creado', 'Se ha añadido al catálogo de canjes.');
-  };
-
-  const handleUpdateReward = (id, updatedData) => {
-    setRewards(rewards.map(r => r.id === id ? { ...r, ...updatedData } : r));
-    addLog('Editar Premio', { title: updatedData.title }, 'Actualización de catálogo');
-    showNotification('success', 'Premio Actualizado', 'Los cambios se guardaron correctamente.');
-  };
-
-  const handleDeleteReward = (id) => {
-    const reward = rewards.find(r => r.id === id);
-    if (reward) {
-      setRewards(rewards.filter(r => r.id !== id));
-      addLog('Eliminar Premio', { title: reward.title }, 'Baja de catálogo');
-      showNotification('success', 'Premio Eliminado', 'Se quitó del catálogo de canjes.');
-    }
-  };
-
-  // --- CHECKOUT ---
+  // --- CHECKOUT PRINCIPAL ---
   const handleCheckout = () => {
     const total = calculateTotal();
     
-    // Validar Stock (solo items NO recompensa o si recompensa linkea a stock)
     const stockIssues = cart.filter(c => !c.isReward).filter(c => {
       const i = inventory.find(x => x.id === c.id);
       return !i || i.stock < c.quantity;
@@ -963,21 +884,15 @@ export default function PartySupplyApp() {
     const maxId = validIds.length > 0 ? Math.max(...validIds) : 0;
     const nextId = maxId + 1;
     
-    // --- FIDELIZACIÓN (LÓGICA ACTUALIZADA) ---
     let pointsEarned = 0;
     let pointsSpent = 0; 
     let clientSnapshot = null;
 
     if (posSelectedClient) {
-      // 1. Calcular Puntos Gastados (Canjes)
       pointsSpent = cart.reduce((acc, item) => acc + (item.isReward ? (item.pointsCost || 0) : 0), 0);
-      
-      // 2. Calcular Puntos Ganados ($150 = 1 Punto) sobre el total pagado 
       if (total > 0) {
         pointsEarned = Math.floor(total / 150);
       }
-
-      // 3. Impactar en el saldo del cliente
       const newBalance = Math.max(0, posSelectedClient.points - pointsSpent + pointsEarned);
       updateMember(posSelectedClient.id, { points: newBalance });
       
@@ -1013,7 +928,12 @@ export default function PartySupplyApp() {
     setCart([]); setInstallments(1); setPosSearch(''); setPosSelectedClient(null);
   };
 
-  const handleDeleteTransaction = (tx) => { setTransactionToRefund(tx); setRefundReason(''); setIsRefundModalOpen(true); };
+  const handleDeleteTransaction = (tx) => {
+    setTransactionToRefund(tx);
+    setRefundReason('');
+    setIsRefundModalOpen(true);
+  };
+
   const handleConfirmRefund = (e) => {
     e.preventDefault();
     const tx = transactionToRefund;
@@ -1025,17 +945,33 @@ export default function PartySupplyApp() {
     } else {
       const newInventory = inventory.map((prod) => {
         const itemInTx = tx.items.find((i) => i.id === prod.id);
-        if (itemInTx) { return { ...prod, stock: prod.stock + (Number(itemInTx.qty) || 0) }; }
+        if (itemInTx) {
+          return { ...prod, stock: prod.stock + (Number(itemInTx.qty) || 0) };
+        }
         return prod;
       });
       setInventory(newInventory);
-      setTransactions(transactions.map((t) => t.id === tx.id ? { ...t, status: 'voided' } : t));
-      addLog('Venta Anulada', { transactionId: tx.id, originalTotal: tx.total }, refundReason);
+      setTransactions(
+        transactions.map((t) =>
+          t.id === tx.id ? { ...t, status: 'voided' } : t
+        )
+      );
+      addLog(
+        'Venta Anulada',
+        { 
+          transactionId: tx.id, 
+          originalTotal: tx.total,
+          itemsReturned: tx.items 
+        },
+        refundReason
+      );
       showNotification('warning', 'Venta Anulada', 'Se anuló la venta y se devolvió el stock.');
     }
-    setIsRefundModalOpen(false); setTransactionToRefund(null);
+    setIsRefundModalOpen(false);
+    setTransactionToRefund(null);
   };
 
+  // --- FUNCIONES COMPLETAS DE EDICIÓN DE TRANSACCIÓN (RESTAURADAS) ---
   const addTxItem = (product) => {
     if (!editingTransaction) return;
     const existingItemIndex = editingTransaction.items.findIndex(
@@ -1060,7 +996,10 @@ export default function PartySupplyApp() {
         },
       ];
     }
-    const subtotal = updatedItems.reduce((acc, item) => acc + (Number(item.price) || 0) * (Number(item.qty) || 0), 0);
+    const subtotal = updatedItems.reduce(
+      (acc, item) => acc + (Number(item.price) || 0) * (Number(item.qty) || 0),
+      0
+    );
     const newTotal = editingTransaction.payment === 'Credito' ? subtotal * 1.1 : subtotal;
     setEditingTransaction({ ...editingTransaction, items: updatedItems, total: newTotal });
     setTransactionSearch('');
@@ -1069,7 +1008,10 @@ export default function PartySupplyApp() {
   const removeTxItem = (itemIndex) => {
     if (!editingTransaction) return;
     const updatedItems = editingTransaction.items.filter((item, idx) => idx !== itemIndex);
-    if (updatedItems.length === 0) { showNotification('warning', 'Operación Inválida', 'No puedes dejar la orden vacía.'); return; }
+    if (updatedItems.length === 0) {
+      showNotification('warning', 'Operación Inválida', 'No puedes dejar la orden vacía.');
+      return;
+    }
     const subtotal = updatedItems.reduce((acc, item) => acc + (Number(item.price) || 0) * (Number(item.qty) || 0), 0);
     const newTotal = editingTransaction.payment === 'Credito' ? subtotal * 1.1 : subtotal;
     setEditingTransaction({ ...editingTransaction, items: updatedItems, total: newTotal });
@@ -1079,7 +1021,12 @@ export default function PartySupplyApp() {
     if (!editingTransaction) return;
     const qty = parseInt(val);
     if (isNaN(qty) || qty < 1) return;
-    const updatedItems = editingTransaction.items.map((item, idx) => { if (idx === itemIndex) return { ...item, qty: qty }; return item; });
+    const updatedItems = editingTransaction.items.map((item, idx) => {
+      if (idx === itemIndex) {
+        return { ...item, qty: qty };
+      }
+      return item;
+    });
     const subtotal = updatedItems.reduce((acc, item) => acc + (Number(item.price) || 0) * (Number(item.qty) || 0), 0);
     const newTotal = editingTransaction.payment === 'Credito' ? subtotal * 1.1 : subtotal;
     setEditingTransaction({ ...editingTransaction, items: updatedItems, total: newTotal });
@@ -1104,7 +1051,48 @@ export default function PartySupplyApp() {
     const originalTx = transactions.find((t) => t.id === editingTransaction.id);
     if (!originalTx) return;
 
-    // Recalculo de stock y guardado
+    const changes = {};
+    if (originalTx.total !== editingTransaction.total) {
+        changes.total = { old: originalTx.total, new: editingTransaction.total };
+    }
+    if (originalTx.payment !== editingTransaction.payment) {
+        changes.payment = { old: originalTx.payment, new: editingTransaction.payment };
+    }
+
+    const productChanges = [];
+    const oldItemsMap = new Map(originalTx.items.map(i => [i.id || i.productId, i]));
+    
+    editingTransaction.items.forEach(newItem => {
+        const itemId = newItem.id || newItem.productId;
+        const oldItem = oldItemsMap.get(itemId);
+        
+        if (!oldItem) {
+            productChanges.push({
+                title: newItem.title,
+                oldQty: 0,
+                newQty: newItem.qty,
+                diff: newItem.qty
+            });
+        } else if (oldItem.qty !== newItem.qty) {
+            productChanges.push({
+                title: newItem.title,
+                oldQty: oldItem.qty,
+                newQty: newItem.qty,
+                diff: newItem.qty - oldItem.qty
+            });
+        }
+        if (oldItem) oldItemsMap.delete(itemId);
+    });
+
+    oldItemsMap.forEach(oldItem => {
+        productChanges.push({
+            title: oldItem.title,
+            oldQty: oldItem.qty,
+            newQty: 0,
+            diff: -oldItem.qty
+        });
+    });
+
     let tempInventory = [...inventory];
     tempInventory = tempInventory.map((prod) => {
       const originalItem = originalTx.items.find((i) => i.id === prod.id);
@@ -1113,18 +1101,64 @@ export default function PartySupplyApp() {
     const stockErrors = [];
     editingTransaction.items.forEach((newItem) => {
       const prod = tempInventory.find((p) => p.id === newItem.id);
-      if (!prod || prod.stock < (Number(newItem.qty) || 0)) { stockErrors.push(newItem.title); }
+      if (!prod || prod.stock < (Number(newItem.qty) || 0)) {
+        stockErrors.push(newItem.title);
+      }
     });
-    if (stockErrors.length > 0) { showNotification('error', 'Stock Insuficiente', `Error con: ${stockErrors.join('\n- ')}`); return; }
+    if (stockErrors.length > 0) {
+      showNotification('error', 'Stock Insuficiente', `Error con: ${stockErrors.join('\n- ')}`);
+      return;
+    }
     tempInventory = tempInventory.map((prod) => {
       const newItem = editingTransaction.items.find((i) => i.id === prod.id);
       return newItem ? { ...prod, stock: prod.stock - (Number(newItem.qty) || 0) } : prod;
     });
 
     setInventory(tempInventory);
-    setTransactions(transactions.map((t) => (t.id === editingTransaction.id ? editingTransaction : t)));
-    addLog('Modificación Pedido', { transactionId: editingTransaction.id }, editReason);
-    setEditingTransaction(null); setEditReason(''); showNotification('success', 'Pedido Actualizado', 'La transacción fue modificada con éxito.');
+    setTransactions(
+      transactions.map((t) => (t.id === editingTransaction.id ? editingTransaction : t))
+    );
+
+    addLog(
+      'Modificación Pedido', 
+      { 
+        transactionId: editingTransaction.id,
+        changes: changes,
+        productChanges: productChanges,
+        itemsSnapshot: editingTransaction.items
+      }, 
+      editReason
+    );
+
+    setEditingTransaction(null);
+    setEditReason('');
+    showNotification('success', 'Pedido Actualizado', 'La transacción fue modificada con éxito.');
+  };
+
+  // --- LOGICA DE CANJES DE PREMIOS (CRUD) ---
+  const handleAddReward = (reward) => {
+    const newReward = {
+      ...reward,
+      id: `rew-${Date.now()}`
+    };
+    setRewards([...rewards, newReward]);
+    addLog('Nuevo Premio', { title: newReward.title, cost: newReward.pointsCost }, 'Gestión Catálogo');
+    showNotification('success', 'Premio Creado', 'Se ha añadido al catálogo de canjes.');
+  };
+
+  const handleUpdateReward = (id, updatedData) => {
+    setRewards(rewards.map(r => r.id === id ? { ...r, ...updatedData } : r));
+    addLog('Editar Premio', { title: updatedData.title }, 'Actualización de catálogo');
+    showNotification('success', 'Premio Actualizado', 'Los cambios se guardaron correctamente.');
+  };
+
+  const handleDeleteReward = (id) => {
+    const reward = rewards.find(r => r.id === id);
+    if (reward) {
+      setRewards(rewards.filter(r => r.id !== id));
+      addLog('Eliminar Premio', { title: reward.title }, 'Baja de catálogo');
+      showNotification('success', 'Premio Eliminado', 'Se quitó del catálogo de canjes.');
+    }
   };
 
   // --- RENDERIZADO LOGIN ---
@@ -1133,12 +1167,24 @@ export default function PartySupplyApp() {
       return (
         <div className="flex h-screen items-center justify-center bg-slate-100">
           <div className="bg-white p-6 rounded-xl shadow-xl w-full max-w-xs text-center border">
-            <div className="flex justify-center mb-4"><div className="p-3 bg-fuchsia-600 rounded-xl shadow-lg"><PartyPopper className="text-white" size={32} /></div></div>
+            <div className="flex justify-center mb-4">
+              <div className="p-3 bg-fuchsia-600 rounded-xl shadow-lg">
+                <PartyPopper className="text-white" size={32} />
+              </div>
+            </div>
             <h1 className="text-lg font-bold text-slate-800 mb-1">PartyManager</h1>
             <p className="text-slate-500 text-xs mb-6">Selecciona tu usuario</p>
             <div className="space-y-3">
-              <button onClick={() => handleSelectRole('admin')} className="w-full flex items-center gap-3 p-3 border rounded-xl hover:bg-slate-50 transition-colors group"><div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-xs">DU</div><div className="text-left flex-1"><p className="font-bold text-slate-800 text-sm">Dueño</p></div><ChevronRight size={16} className="text-slate-300 group-hover:text-slate-500" /></button>
-              <button onClick={() => handleSelectRole('seller')} className="w-full flex items-center gap-3 p-3 border rounded-xl hover:bg-slate-50 transition-colors group"><div className="w-8 h-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center font-bold text-xs">VE</div><div className="text-left flex-1"><p className="font-bold text-slate-800 text-sm">Vendedor</p></div><ChevronRight size={16} className="text-slate-300 group-hover:text-slate-500" /></button>
+              <button onClick={() => handleSelectRole('admin')} className="w-full flex items-center gap-3 p-3 border rounded-xl hover:bg-slate-50 transition-colors group">
+                <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-xs">DU</div>
+                <div className="text-left flex-1"><p className="font-bold text-slate-800 text-sm">Dueño</p></div>
+                <ChevronRight size={16} className="text-slate-300 group-hover:text-slate-500" />
+              </button>
+              <button onClick={() => handleSelectRole('seller')} className="w-full flex items-center gap-3 p-3 border rounded-xl hover:bg-slate-50 transition-colors group">
+                <div className="w-8 h-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center font-bold text-xs">VE</div>
+                <div className="text-left flex-1"><p className="font-bold text-slate-800 text-sm">Vendedor</p></div>
+                <ChevronRight size={16} className="text-slate-300 group-hover:text-slate-500" />
+              </button>
             </div>
           </div>
         </div>
@@ -1149,9 +1195,22 @@ export default function PartySupplyApp() {
       return (
         <div className="flex h-screen items-center justify-center bg-slate-100">
           <div className="bg-white p-6 rounded-xl shadow-xl w-full max-w-xs text-center border">
-            <div className="flex justify-between items-center mb-6"><button onClick={() => setLoginStep('select')} className="text-slate-400 hover:text-slate-600"><ArrowLeft size={20} /></button><h1 className="text-lg font-bold text-slate-800">Iniciar Sesión</h1><div className="w-5"></div></div>
-            <div className="mb-6 flex flex-col items-center"><div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-sm mb-2 ${user.role === 'admin' ? 'bg-blue-100 text-blue-600' : 'bg-green-100 text-green-600'}`}>{user.avatar}</div><p className="font-bold text-slate-700">{user.name}</p></div>
-            <form onSubmit={handleSubmitLogin} className="space-y-4"><div><input autoFocus type="password" placeholder="Contraseña" className="w-full px-4 py-3 border border-slate-300 rounded-xl text-center text-lg tracking-widest focus:ring-2 focus:ring-fuchsia-500 focus:border-fuchsia-500 outline-none bg-white text-slate-800 placeholder:text-slate-400" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} />{loginError && (<p className="text-xs text-red-500 mt-2">{loginError}</p>)}</div><button type="submit" className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800 transition-colors">Ingresar</button></form>
+            <div className="flex justify-between items-center mb-6">
+              <button onClick={() => setLoginStep('select')} className="text-slate-400 hover:text-slate-600"><ArrowLeft size={20} /></button>
+              <h1 className="text-lg font-bold text-slate-800">Iniciar Sesión</h1>
+              <div className="w-5"></div>
+            </div>
+            <div className="mb-6 flex flex-col items-center">
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-sm mb-2 ${user.role === 'admin' ? 'bg-blue-100 text-blue-600' : 'bg-green-100 text-green-600'}`}>{user.avatar}</div>
+              <p className="font-bold text-slate-700">{user.name}</p>
+            </div>
+            <form onSubmit={handleSubmitLogin} className="space-y-4">
+              <div>
+                <input autoFocus type="password" placeholder="Contraseña" className="w-full px-4 py-3 border border-slate-300 rounded-xl text-center text-lg tracking-widest focus:ring-2 focus:ring-fuchsia-500 focus:border-fuchsia-500 outline-none bg-white text-slate-800 placeholder:text-slate-400" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} />
+                {loginError && (<p className="text-xs text-red-500 mt-2">{loginError}</p>)}
+              </div>
+              <button type="submit" className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800 transition-colors">Ingresar</button>
+            </form>
           </div>
         </div>
       );
@@ -1181,33 +1240,38 @@ export default function PartySupplyApp() {
           </div>
         </header>
         <main className="flex-1 overflow-y-auto p-4 bg-slate-100">
-          {activeTab === 'dashboard' && (<DashboardView openingBalance={openingBalance} totalSales={totalSales} salesCount={salesCount} currentUser={currentUser} setTempOpeningBalance={setTempOpeningBalance} setIsOpeningBalanceModalOpen={setIsOpeningBalanceModalOpen} transactions={validTransactions} dailyLogs={dailyLogs} inventory={inventory} />)}
+          {activeTab === 'dashboard' && (
+            <DashboardView 
+              openingBalance={openingBalance} 
+              totalSales={totalSales} 
+              salesCount={salesCount} 
+              currentUser={currentUser} 
+              setTempOpeningBalance={setTempOpeningBalance} 
+              setIsOpeningBalanceModalOpen={setIsOpeningBalanceModalOpen} 
+              transactions={validTransactions} 
+              dailyLogs={dailyLogs} 
+              inventory={inventory}
+              // PROPS NUEVAS
+              expenses={expenses}
+              onOpenExpenseModal={() => setIsExpenseModalOpen(true)}
+            />
+          )}
           {activeTab === 'inventory' && (<InventoryView inventory={inventory} categories={categories} currentUser={currentUser} inventoryViewMode={inventoryViewMode} setInventoryViewMode={setInventoryViewMode} gridColumns={inventoryGridColumns} setGridColumns={setInventoryGridColumns} inventorySearch={inventorySearch} setInventorySearch={setInventorySearch} inventoryCategoryFilter={inventoryCategoryFilter} setInventoryCategoryFilter={setInventoryCategoryFilter} setIsModalOpen={setIsModalOpen} setEditingProduct={(prod) => { setEditingProduct(prod); setEditReason(''); }} handleDeleteProduct={handleDeleteProductRequest} setSelectedImage={setSelectedImage} setIsImageModalOpen={setIsImageModalOpen} />)}
           {activeTab === 'pos' && (isRegisterClosed ? (<div className="h-full flex flex-col items-center justify-center text-slate-400"><Lock size={64} className="mb-4 text-slate-300" /><h3 className="text-xl font-bold text-slate-600">Caja Cerrada</h3>{currentUser.role === 'admin' ? (<><p className="mb-6">Debes abrir la caja para realizar ventas.</p><button onClick={toggleRegisterStatus} className="bg-green-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-green-700">Abrir Caja</button></>) : (<p className="mb-6 text-center">El Dueño debe abrir la caja para realizar ventas.</p>)}</div>) : (<POSView inventory={inventory} categories={categories} addToCart={addToCart} cart={cart} removeFromCart={removeFromCart} updateCartItemQty={updateCartItemQty} selectedPayment={selectedPayment} setSelectedPayment={setSelectedPayment} installments={installments} setInstallments={setInstallments} calculateTotal={calculateTotal} handleCheckout={handleCheckout} posSearch={posSearch} setPosSearch={setPosSearch} selectedCategory={posSelectedCategory} setSelectedCategory={setPosSelectedCategory} posViewMode={posViewMode} setPosViewMode={setPosViewMode} gridColumns={posGridColumns} setGridColumns={setPosGridColumns} selectedClient={posSelectedClient} setSelectedClient={setPosSelectedClient} onOpenClientModal={() => setIsClientModalOpen(true)} onOpenRedemptionModal={() => setIsRedemptionModalOpen(true)} />))}
           
           {activeTab === 'clients' && (<ClientsView members={members} addMember={handleAddMemberWithLog} updateMember={handleUpdateMemberWithLog} deleteMember={handleDeleteMemberWithLog} currentUser={currentUser} onViewTicket={handleViewTicket} onEditTransaction={handleEditTransactionRequest} onDeleteTransaction={handleDeleteTransaction} transactions={transactions} />)}
           {activeTab === 'history' && (<HistoryView transactions={transactions} dailyLogs={dailyLogs} inventory={inventory} currentUser={currentUser} showNotification={showNotification} onViewTicket={handleViewTicket} onDeleteTransaction={handleDeleteTransaction} onEditTransaction={handleEditTransactionRequest} setTransactions={setTransactions} setDailyLogs={setDailyLogs} />)}
           
-          {/* [NUEVO] VISTA DE GESTIÓN DE PREMIOS */}
-          {activeTab === 'rewards' && (
-            <RewardsView 
-              rewards={rewards} 
-              onAddReward={handleAddReward}
-              onUpdateReward={handleUpdateReward}
-              onDeleteReward={handleDeleteReward}
-            />
-          )}
-
-          {/* [NUEVO] VISTA DE HISTORIAL DE REPORTES */}
-          {activeTab === 'reports' && currentUser.role === 'admin' && (
-            <ReportsHistoryView pastClosures={pastClosures} />
-          )}
+          {/* VISTAS NUEVAS */}
+          {activeTab === 'rewards' && (<RewardsView rewards={rewards} onAddReward={handleAddReward} onUpdateReward={handleUpdateReward} onDeleteReward={handleDeleteReward} />)}
+          {activeTab === 'reports' && currentUser.role === 'admin' && (<ReportsHistoryView pastClosures={pastClosures} />)}
 
           {activeTab === 'logs' && currentUser.role === 'admin' && (<LogsView dailyLogs={dailyLogs} setDailyLogs={setDailyLogs} inventory={inventory} />)}
           {activeTab === 'categories' && currentUser.role === 'admin' && (<CategoryManagerView categories={categories} inventory={inventory} onAddCategory={handleAddCategoryFromView} onDeleteCategory={handleDeleteCategoryFromView} onEditCategory={(oldName, newName) => { if (newName && newName !== oldName && !categories.includes(newName)) { setCategories(categories.map((c) => (c === oldName ? newName : c))); setInventory(inventory.map((p) => { let updatedCats = p.categories ? [...p.categories] : p.category ? [p.category] : []; if (updatedCats.includes(oldName)) { updatedCats = updatedCats.map((c) => c === oldName ? newName : c); } const updatedCat = p.category === oldName ? newName : p.category; return { ...p, category: updatedCat, categories: updatedCats, }; })); addLog('Categoría', { name: newName, type: 'edit', oldName: oldName, }); showNotification('success', 'Categoría Editada', 'Nombre actualizado correctamente.'); } }} onBatchUpdateProductCategory={(changes) => { if (!changes || changes.length === 0) return; let updatedInventory = [...inventory]; const logDetails = []; changes.forEach(({ productId, categoryName, action }) => { updatedInventory = updatedInventory.map((p) => { if (p.id === productId) { const currentCats = Array.isArray(p.categories) ? [...p.categories] : p.category ? [p.category] : []; let newCats = [...currentCats]; if (action === 'add') { if (!newCats.includes(categoryName)) newCats.push(categoryName); } else if (action === 'remove') { newCats = newCats.filter((c) => c !== categoryName); } return { ...p, categories: newCats, category: newCats.length > 0 ? newCats[0] : '', }; } return p; }); logDetails.push(`${action === 'add' ? 'Agregado a' : 'Quitado de'} ${categoryName} (Prod: ${productId})`); }); setInventory(updatedInventory); addLog('Edición Masiva Categorías', { count: changes.length, details: logDetails, }); showNotification('success', 'Edición Masiva', `Se actualizaron ${changes.length} productos.`); }} onUpdateProductCategory={() => {}} />)}
         </main>
       </div>
 
+      {/* --- MODALES --- */}
       <TicketPrintLayout transaction={ticketToView || saleSuccessModal} />
       <NotificationModal isOpen={notification.isOpen} onClose={closeNotification} type={notification.type} title={notification.title} message={notification.message} />
       <OpeningBalanceModal isOpen={isOpeningBalanceModalOpen} onClose={() => setIsOpeningBalanceModalOpen(false)} tempOpeningBalance={tempOpeningBalance} setTempOpeningBalance={setTempOpeningBalance} tempClosingTime={tempClosingTime} setTempClosingTime={setTempClosingTime} onSave={handleSaveOpeningBalance} />
@@ -1226,6 +1290,7 @@ export default function PartySupplyApp() {
       <BarcodeDuplicateModal isOpen={barcodeDuplicateModal.isOpen} existingProduct={barcodeDuplicateModal.existingProduct} onClose={() => setBarcodeDuplicateModal({ isOpen: false, existingProduct: null, newBarcode: '' })} onKeepExisting={() => setBarcodeDuplicateModal({ isOpen: false, existingProduct: null, newBarcode: '' })} onReplaceBarcode={handleReplaceDuplicateBarcode} />
       <ClientSelectionModal isOpen={isClientModalOpen} onClose={() => setIsClientModalOpen(false)} clients={members} addClient={handleAddMemberWithLog} onSelectClient={(client) => setPosSelectedClient(client)} onCancelFlow={() => handleCheckout()} />
       <RedemptionModal isOpen={isRedemptionModalOpen} onClose={() => setIsRedemptionModalOpen(false)} client={posSelectedClient} rewards={rewards} onRedeem={handleRedeemReward} />
+      <ExpenseModal isOpen={isExpenseModalOpen} onClose={() => setIsExpenseModalOpen(false)} onSave={handleAddExpense} />
     </div>
   );
 }
