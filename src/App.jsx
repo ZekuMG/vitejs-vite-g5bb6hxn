@@ -26,8 +26,9 @@ import ClientsView from './views/ClientsView';
 import HistoryView from './views/HistoryView';
 import LogsView from './views/LogsView';
 import CategoryManagerView from './views/CategoryManagerView';
-// [NUEVO] Importamos la vista de gestión de premios
 import RewardsView from './views/RewardsView';
+// [NUEVO] Importamos la vista de historial de reportes
+import ReportsHistoryView from './views/ReportsHistoryView';
 
 // Modales (UI separada)
 import {
@@ -92,6 +93,12 @@ export default function PartySupplyApp() {
   const [dailyLogs, setDailyLogs] = useState(() =>
     getInitialState('party_logs', INITIAL_LOGS)
   );
+  
+  // [NUEVO] Historial de Cierres de Caja (Reportes)
+  const [pastClosures, setPastClosures] = useState(() => 
+    getInitialState('party_closures', [])
+  );
+
   const [openingBalance, setOpeningBalance] = useState(() =>
     getInitialState('party_openingBalance', 25000)
   );
@@ -367,6 +374,8 @@ export default function PartySupplyApp() {
   useEffect(() => { window.localStorage.setItem('party_rewards', JSON.stringify(rewards)); }, [rewards]);
   useEffect(() => { window.localStorage.setItem('party_transactions', JSON.stringify(transactions)); }, [transactions]);
   useEffect(() => { window.localStorage.setItem('party_logs', JSON.stringify(dailyLogs)); }, [dailyLogs]);
+  // [NUEVO] Persistencia de reportes
+  useEffect(() => { window.localStorage.setItem('party_closures', JSON.stringify(pastClosures)); }, [pastClosures]);
   useEffect(() => { window.localStorage.setItem('party_openingBalance', JSON.stringify(openingBalance)); }, [openingBalance]);
   useEffect(() => { window.localStorage.setItem('party_isRegisterClosed', JSON.stringify(isRegisterClosed)); }, [isRegisterClosed]);
   useEffect(() => { window.localStorage.setItem('party_closingTime', JSON.stringify(closingTime)); }, [closingTime]);
@@ -584,8 +593,90 @@ export default function PartySupplyApp() {
     }
   };
 
+  // --- LÓGICA MEJORADA: CIERRE DE CAJA Y GENERACIÓN DE REPORTE ---
   const executeRegisterClose = (isAuto = false) => {
+    // 1. Calcular Métricas para el Reporte
+    const closeDate = new Date();
+    
+    // a. Desglose de Ventas por Producto (Stock Vendido)
+    const itemsSoldMap = {};
+    let totalCost = 0; // Costo de Mercadería Vendida (CMV)
+
+    validTransactions.forEach(tx => {
+      tx.items.forEach(item => {
+        // Intentamos obtener el costo original. Si no está en el item, lo buscamos en inventario.
+        const inventoryItem = inventory.find(p => p.id === (item.productId || item.id));
+        const cost = Number(inventoryItem?.purchasePrice || 0);
+        
+        if (!itemsSoldMap[item.id]) {
+          itemsSoldMap[item.id] = {
+            id: item.id,
+            title: item.title,
+            qty: 0,
+            revenue: 0,
+            cost: 0
+          };
+        }
+        
+        const qty = Number(item.qty || item.quantity || 0);
+        const price = Number(item.price || 0); // Precio de venta
+        
+        itemsSoldMap[item.id].qty += qty;
+        itemsSoldMap[item.id].revenue += (price * qty); 
+        itemsSoldMap[item.id].cost += (cost * qty);
+        
+        totalCost += (cost * qty);
+      });
+    });
+
+    const itemsSoldList = Object.values(itemsSoldMap);
+
+    // b. Desglose por Método de Pago
+    const paymentMethodsSummary = {};
+    validTransactions.forEach(tx => {
+      const method = tx.payment || 'Otros';
+      if (!paymentMethodsSummary[method]) paymentMethodsSummary[method] = 0;
+      paymentMethodsSummary[method] += Number(tx.total);
+    });
+
+    // c. Ticket Promedio
+    const averageTicket = salesCount > 0 ? (totalSales / salesCount) : 0;
+
+    // d. Ganancia Neta
+    const netProfit = totalSales - totalCost;
+
+    // 2. Crear Objeto Reporte
+    const report = {
+      id: `rep-${Date.now()}`,
+      date: closeDate.toLocaleDateString('es-AR'),
+      openTime: dailyLogs.find(l => l.action === 'Apertura de Caja')?.timestamp || '--:--',
+      closeTime: closeDate.toLocaleTimeString('es-AR'),
+      user: currentUser?.name || 'Automático',
+      type: isAuto ? 'Automático' : 'Manual',
+      
+      // Financiero
+      openingBalance: openingBalance,
+      totalSales: totalSales,
+      finalBalance: openingBalance + totalSales,
+      totalCost: totalCost,
+      netProfit: netProfit,
+      
+      // Métricas
+      salesCount: salesCount,
+      averageTicket: averageTicket,
+      
+      // Desgloses
+      paymentMethods: paymentMethodsSummary,
+      itemsSold: itemsSoldList,
+      transactionsSnapshot: [...validTransactions] // Guardamos snapshot por seguridad
+    };
+
+    // 3. Guardar Reporte en Historial
+    setPastClosures([report, ...pastClosures]);
+
+    // 4. Proceder al Cierre
     setIsRegisterClosed(true);
+    
     addLog(
       'Cierre de Caja',
       {
@@ -595,15 +686,19 @@ export default function PartySupplyApp() {
         finalBalance: openingBalance + totalSales,
         closingTime: new Date().toLocaleTimeString('es-AR'),
         scheduledClosingTime: closingTime,
-        type: isAuto ? 'automatic' : 'manual'
+        type: isAuto ? 'automatic' : 'manual',
+        reportId: report.id // Referencia al reporte generado
       },
       isAuto ? 'Cierre Automático por Horario' : 'Cierre de jornada'
     );
+    
     setTransactions([]);
     setIsClosingCashModalOpen(false);
     if (isAuto) {
       setIsAutoCloseAlertOpen(true);
     }
+    
+    showNotification('success', 'Reporte Generado', 'Se ha guardado el reporte del día en el historial.');
   };
 
   const handleConfirmCloseCash = () => executeRegisterClose(false);
@@ -1072,7 +1167,7 @@ export default function PartySupplyApp() {
           <div className="flex items-center gap-3">
             <div>
               <h2 className="text-base font-bold text-slate-800 uppercase tracking-wide">
-                {activeTab === 'pos' ? 'Punto de Venta' : activeTab === 'dashboard' ? 'Control de Caja' : activeTab === 'clients' ? 'Gestión de Socios' : activeTab === 'history' ? 'Historial de Transacciones' : activeTab === 'rewards' ? 'Gestión de Premios' : activeTab === 'logs' ? 'Registro de Acciones' : activeTab === 'categories' ? 'Categorías' : 'Gestión de Stock'}
+                {activeTab === 'pos' ? 'Punto de Venta' : activeTab === 'dashboard' ? 'Control de Caja' : activeTab === 'clients' ? 'Gestión de Socios' : activeTab === 'history' ? 'Historial de Transacciones' : activeTab === 'rewards' ? 'Gestión de Premios' : activeTab === 'reports' ? 'Reportes Diarios' : activeTab === 'logs' ? 'Registro de Acciones' : activeTab === 'categories' ? 'Categorías' : 'Gestión de Stock'}
               </h2>
               <p className="text-[11px] text-slate-400">{currentTime.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} • <span className="font-bold text-slate-500">{currentTime.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false })} hs</span></p>
             </div>
@@ -1101,6 +1196,11 @@ export default function PartySupplyApp() {
               onUpdateReward={handleUpdateReward}
               onDeleteReward={handleDeleteReward}
             />
+          )}
+
+          {/* [NUEVO] VISTA DE HISTORIAL DE REPORTES */}
+          {activeTab === 'reports' && currentUser.role === 'admin' && (
+            <ReportsHistoryView pastClosures={pastClosures} />
           )}
 
           {activeTab === 'logs' && currentUser.role === 'admin' && (<LogsView dailyLogs={dailyLogs} setDailyLogs={setDailyLogs} inventory={inventory} />)}

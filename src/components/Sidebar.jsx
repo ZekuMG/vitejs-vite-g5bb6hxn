@@ -9,7 +9,8 @@ import {
   FileText,
   Tag,
   Users,
-  Gift // [NUEVO] Importamos el icono de regalo
+  Gift,
+  FileBarChart // [NUEVO] Icono para Reportes
 } from 'lucide-react';
 
 const SidebarButton = ({ onClick, isActive, icon: Icon, label }) => {
@@ -87,7 +88,7 @@ export default function Sidebar({
           icon={Users}
           label="Clientes"
         />
-        {/* [NUEVO] Botón de Premios / Canje */}
+        {/* Botón de Premios / Canje */}
         <SidebarButton
           onClick={() => setActiveTab('rewards')}
           isActive={activeTab === 'rewards'}
@@ -96,7 +97,7 @@ export default function Sidebar({
         />
       </nav>
 
-      {/* Botón Historial (Se mantiene abajo según tu diseño anterior) */}
+      {/* Botón Historial */}
       <SidebarButton
           onClick={() => setActiveTab('history')}
           isActive={activeTab === 'history'}
@@ -131,6 +132,18 @@ export default function Sidebar({
             <div className="px-3 py-2 border-b border-slate-100 bg-slate-50">
               <p className="text-xs font-bold text-slate-700">Menú de Dueño</p>
             </div>
+            
+            {/* [NUEVO] Opción de Reportes Diarios */}
+            <button
+              onClick={() => {
+                setActiveTab('reports');
+                setShowAdminMenu(false);
+              }}
+              className="w-full text-left px-4 py-2.5 text-xs text-slate-600 hover:bg-fuchsia-50 hover:text-fuchsia-700 flex items-center gap-2 transition-colors border-b border-slate-50"
+            >
+              <FileBarChart size={14} /> Reportes de Cierre
+            </button>
+
             <button
               onClick={() => {
                 setActiveTab('logs');
