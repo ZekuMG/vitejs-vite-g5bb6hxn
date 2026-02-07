@@ -1161,6 +1161,14 @@ export default function PartySupplyApp() {
     }
   };
 
+  // --- NUEVA FUNCIÓN FALTANTE ---
+  const handleRedeemReward = (reward) => {
+    if (!posSelectedClient) {
+      showNotification('error', 'Error', 'No hay cliente seleccionado para el canje.');
+      return;
+    }
+  }
+
   // --- RENDERIZADO LOGIN ---
   if (!currentUser) {
     if (loginStep === 'select') {
