@@ -1,4 +1,8 @@
 // src/views/DashboardView.jsx
+// ♻️ REFACTOR: Lógica de cálculo extraída a hooks/useDashboardData.js
+//              Widgets extraídos a components/dashboard/
+//              Este archivo conserva: estado UI, drag-and-drop, persistencia de layout
+
 import React, { useState, useEffect } from 'react';
 import { 
   GripVertical, 
@@ -21,9 +25,11 @@ import {
 } from '../components/dashboard';
 import { formatPrice } from '../utils/helpers';
 
-// Agregamos 'activityPanel' al orden por defecto
+// Órdenes por defecto (Constantes)
+// Agregamos 'activityPanel' al final de la sección inferior
 const DEFAULT_BOTTOM_ORDER = ['chart', 'payments', 'topProducts', 'lowStock', 'activityPanel'];
-const DEFAULT_TOP_ORDER = ['sales', 'revenue', 'net', 'opening', 'average', 'placeholder'];
+// Reemplazamos 'placeholder' por 'expenses' si deseas que aparezca por defecto
+const DEFAULT_TOP_ORDER = ['sales', 'revenue', 'net', 'opening', 'average', 'expenses'];
 
 export default function DashboardView({
   openingBalance,
@@ -35,8 +41,8 @@ export default function DashboardView({
   transactions,
   dailyLogs,
   inventory,
-  // Props recuperadas para el manejo de gastos y actividad
-  expenses = [], 
+  // Props nuevas recuperadas
+  expenses = [],
   onOpenExpenseModal
 }) {
   // =====================================================
@@ -53,12 +59,25 @@ export default function DashboardView({
   // --- GESTIÓN DE ORDEN Y PERSISTENCIA ---
   const [widgetOrder, setWidgetOrder] = useState(() => {
     const saved = localStorage.getItem('party_dashboard_order_bottom');
-    return saved ? JSON.parse(saved) : DEFAULT_BOTTOM_ORDER;
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      // Seguridad: Si el guardado viejo no tiene el nuevo panel, lo agregamos
+      if (!parsed.includes('activityPanel')) return [...parsed, 'activityPanel'];
+      return parsed;
+    }
+    return DEFAULT_BOTTOM_ORDER;
   });
 
   const [topWidgetOrder, setTopWidgetOrder] = useState(() => {
     const saved = localStorage.getItem('party_dashboard_order_top');
-    return saved ? JSON.parse(saved) : DEFAULT_TOP_ORDER;
+    if (saved) {
+        const parsed = JSON.parse(saved);
+        // Seguridad: Si el guardado viejo tiene placeholder, lo migramos a expenses
+        const migrated = parsed.map(k => k === 'placeholder' ? 'expenses' : k);
+        if (!migrated.includes('expenses')) return [...migrated, 'expenses'];
+        return migrated;
+    }
+    return DEFAULT_TOP_ORDER;
   });
 
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -90,10 +109,12 @@ export default function DashboardView({
   };
 
   const handleRestoreLayout = () => {
-    const savedBottom = localStorage.getItem('party_dashboard_order_bottom');
-    const savedTop = localStorage.getItem('party_dashboard_order_top');
-    setWidgetOrder(savedBottom ? JSON.parse(savedBottom) : DEFAULT_BOTTOM_ORDER);
-    setTopWidgetOrder(savedTop ? JSON.parse(savedTop) : DEFAULT_TOP_ORDER);
+    // Borramos localStorage para resetear a los nuevos Defaults
+    localStorage.removeItem('party_dashboard_order_bottom');
+    localStorage.removeItem('party_dashboard_order_top');
+    setWidgetOrder(DEFAULT_BOTTOM_ORDER);
+    setTopWidgetOrder(DEFAULT_TOP_ORDER);
+    setHasUnsavedChanges(false);
   };
 
   // =====================================================
@@ -111,13 +132,21 @@ export default function DashboardView({
   } = useDashboardData({ transactions, dailyLogs, inventory, globalFilter, rankingMode, expenses });
 
   // =====================================================
-  // 2.1 DATOS LOCALES PARA EL NUEVO PANEL
+  // 2.1 DATOS LOCALES PARA EL NUEVO PANEL DE ACTIVIDAD
   // =====================================================
-  // Combinar Ventas y Gastos para el feed de actividad
+  // Unificamos Ventas y Gastos en una sola lista cronológica
   const combinedActivity = [
-    ...(transactions || []).map(t => ({ ...t, type: 'sale', sortTime: t.id })),
-    ...(expenses || []).map(e => ({ ...e, type: 'expense', sortTime: e.id }))
-  ].sort((a, b) => b.sortTime - a.sortTime);
+    ...(transactions || []).map(t => ({
+      ...t,
+      type: 'sale',
+      sortTime: t.id // Usamos ID como timestamp aproximado si no hay date object
+    })),
+    ...(expenses || []).map(e => ({
+      ...e,
+      type: 'expense',
+      sortTime: e.id
+    }))
+  ].sort((a, b) => b.sortTime - a.sortTime); // Más reciente primero
 
   // =====================================================
   // 3. RENDERIZADORES DE WIDGETS
@@ -153,37 +182,39 @@ export default function DashboardView({
       case 'lowStock':
         return <LowStockAlert lowStockProducts={lowStockProducts} />;
       
-      // --- NUEVO WIDGET DE ACTIVIDAD Y BITÁCORA ---
+      // --- NUEVO WIDGET: PANEL DE ACTIVIDAD Y BITÁCORA ---
       case 'activityPanel':
         return (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-full min-h-[400px]">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-full min-h-[450px]">
             
-            {/* PANEL 1: ACTIVIDAD RECIENTE (Ventas + Gastos) */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col overflow-hidden h-[400px]">
+            {/* COLUMNA 1: Actividad Financiera (Ventas + Gastos) */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col overflow-hidden h-full max-h-[450px]">
               <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center shrink-0">
                 <h3 className="font-bold text-slate-700 flex items-center gap-2">
-                  <Clock size={16} className="text-blue-500"/> Actividad Financiera
+                  <Clock size={18} className="text-blue-600"/> Actividad Financiera
                 </h3>
-                <span className="text-[10px] font-bold text-slate-400 uppercase bg-white px-2 py-1 rounded border">En tiempo real</span>
+                <span className="text-[10px] font-bold text-slate-400 bg-white border px-2 py-0.5 rounded">En vivo</span>
               </div>
               
-              <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
+              <div className="flex-1 overflow-y-auto p-2 custom-scrollbar">
                 {combinedActivity.length > 0 ? (
-                  combinedActivity.map((item) => (
-                    <div key={item.sortTime} className="flex items-center justify-between p-3 hover:bg-slate-50 rounded-lg transition-colors border-b border-dashed border-slate-100 last:border-0">
+                  combinedActivity.slice(0, 50).map((item, idx) => ( // Mostramos hasta 50, scroll para verlos
+                    <div key={idx} className="flex items-center justify-between p-3 mb-1 hover:bg-slate-50 rounded-lg transition-colors border-b border-dashed border-slate-100 last:border-0">
                       <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                          item.type === 'sale' ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-600'
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 shadow-sm ${
+                            item.type === 'sale' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'
                         }`}>
-                          {item.type === 'sale' ? <ShoppingCart size={14} /> : <TrendingDown size={14} />}
+                          {item.type === 'sale' ? <ShoppingCart size={16} /> : <TrendingDown size={16} />}
                         </div>
-                        <div>
-                          <p className="text-xs font-bold text-slate-700">
-                            {item.type === 'sale' ? `Venta #${item.id}` : item.category}
-                          </p>
-                          <p className="text-[10px] text-slate-400">
-                            {item.type === 'sale' ? item.payment : (item.paymentMethod || 'Gasto')}
-                          </p>
+                        <div className="flex flex-col">
+                          <span className="text-xs font-bold text-slate-700 leading-tight">
+                              {item.type === 'sale' ? `Venta #${item.id}` : item.category}
+                          </span>
+                          <span className="text-[10px] text-slate-400 leading-tight">
+                              {item.type === 'sale' 
+                                  ? `${item.payment} • ${item.items?.length || 0} items` 
+                                  : `${item.paymentMethod} • ${item.note || '-'}`}
+                          </span>
                         </div>
                       </div>
                       <div className="text-right">
@@ -191,54 +222,56 @@ export default function DashboardView({
                           {item.type === 'sale' ? '+' : '-'}${formatPrice(item.type === 'sale' ? item.total : item.amount)}
                         </p>
                         <p className="text-[10px] text-slate-400">
-                          {item.time || new Date(item.sortTime).toLocaleTimeString('es-AR', {hour:'2-digit', minute:'2-digit'})}
+                          {item.time || new Date(item.sortTime).toLocaleTimeString('es-AR', {hour: '2-digit', minute:'2-digit'})}
                         </p>
                       </div>
                     </div>
                   ))
                 ) : (
-                  <div className="h-full flex flex-col items-center justify-center text-slate-400">
+                  <div className="h-full flex flex-col items-center justify-center text-slate-400 opacity-60">
+                    <Clock size={32} className="mb-2" />
                     <p className="text-xs italic">Sin movimientos hoy</p>
                   </div>
                 )}
               </div>
             </div>
 
-            {/* PANEL 2: BITÁCORA DEL SISTEMA (Logs) */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col overflow-hidden h-[400px]">
+            {/* COLUMNA 2: Bitácora de Acciones (Logs) */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col overflow-hidden h-full max-h-[450px]">
               <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center shrink-0">
                 <h3 className="font-bold text-slate-700 flex items-center gap-2">
-                  <FileText size={16} className="text-fuchsia-500"/> Bitácora
+                  <FileText size={18} className="text-fuchsia-600"/> Bitácora del Sistema
                 </h3>
-                <span className="text-[10px] font-bold text-slate-400 uppercase bg-white px-2 py-1 rounded border">Auditoría</span>
+                <span className="text-[10px] font-bold text-slate-400 bg-white border px-2 py-0.5 rounded">Auditoría</span>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
-                {dailyLogs && dailyLogs.length > 0 ? (
-                  dailyLogs.map((log) => (
-                    <div key={log.id} className="flex gap-3 relative">
-                      {/* Línea de tiempo visual */}
-                      <div className="absolute left-[5px] top-2 bottom-[-16px] w-[1px] bg-slate-200 last:hidden"></div>
-                      
-                      <div className="w-2.5 h-2.5 mt-1.5 rounded-full bg-slate-300 shrink-0 ring-2 ring-white z-10" />
-                      <div className="flex-1">
-                        <p className="text-xs text-slate-700 font-medium">
-                          <span className="font-bold">{log.action}</span>
-                        </p>
-                        <p className="text-[11px] text-slate-500 leading-tight mt-0.5">
-                          {typeof log.details === 'string' ? log.details : 'Detalle registrado'}
-                        </p>
-                        <p className="text-[9px] text-slate-400 mt-1 font-mono">
-                          {log.timestamp} • {log.user}
-                        </p>
+              <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                <div className="space-y-0">
+                  {dailyLogs && dailyLogs.length > 0 ? (
+                    dailyLogs.slice(0, 50).map((log) => ( // Scroll para ver más de 10
+                      <div key={log.id} className="flex gap-3 relative pb-5 border-l border-slate-200 ml-1.5 last:border-0 last:pb-0 group">
+                        <div className="absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full bg-slate-300 ring-4 ring-white group-hover:bg-fuchsia-400 transition-colors" />
+                        <div className="pl-3 -mt-1 w-full">
+                          <div className="flex justify-between items-start">
+                            <span className="text-xs font-bold text-slate-700">{log.action}</span>
+                            <span className="text-[9px] font-mono text-slate-400 bg-slate-50 px-1 rounded">{log.timestamp}</span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 leading-snug mt-0.5 break-words">
+                            {typeof log.details === 'string' ? log.details : 'Detalle registrado en sistema'}
+                          </p>
+                          <p className="text-[9px] text-slate-400 mt-1 flex items-center gap-1">
+                             <span className="w-1 h-1 rounded-full bg-slate-300"></span> {log.user}
+                          </p>
+                        </div>
                       </div>
+                    ))
+                  ) : (
+                    <div className="h-full flex flex-col items-center justify-center text-slate-400 opacity-60 mt-10">
+                      <FileText size={32} className="mb-2" />
+                      <p className="text-xs italic">Registro limpio</p>
                     </div>
-                  ))
-                ) : (
-                  <div className="h-full flex flex-col items-center justify-center text-slate-400">
-                    <p className="text-xs italic">Registro limpio</p>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             </div>
 
@@ -319,7 +352,7 @@ export default function DashboardView({
                 setTempOpeningBalance={setTempOpeningBalance}
                 setIsOpeningBalanceModalOpen={setIsOpeningBalanceModalOpen}
                 globalFilter={globalFilter}
-                // Pasamos props extra para la tarjeta de Gastos (si el componente KpiCard la soporta)
+                // Pasamos props de Gastos para que KpiCards.jsx pueda renderizar la tarjeta 'expenses'
                 expenses={expenses}
                 onOpenExpenseModal={onOpenExpenseModal}
               />
@@ -362,7 +395,7 @@ export default function DashboardView({
                 draggedItem === widgetKey ? 'opacity-40 scale-95 border-dashed border-2 border-slate-300 rounded-xl' : ''
               } ${isFullWidth ? 'lg:col-span-2' : ''}`}
             >
-              <div className="group relative h-full">
+              <div className={`group relative h-full ${widgetKey === 'activityPanel' ? '' : ''}`}>
                 {isAdmin ? (
                   <div className="absolute top-4 right-4 z-20 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 bg-white/80 p-1 rounded backdrop-blur-sm">
                     <GripVertical size={16} />
